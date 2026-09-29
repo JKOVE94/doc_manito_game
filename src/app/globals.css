@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #fbf6ef;
+  --surface: #ffffff;
+  --surface-2: #f3ece2;
+  --ink: #2a2118;
+  --ink-soft: #6f6255;
+  --line: #e6dccf;
+  --brand: #d9573b;       /* 마니또 코랄 */
+  --brand-ink: #ffffff;
+  --accent: #2f7d6d;      /* 미션/성공 그린 */
+  --warn: #c98a12;
+  --danger: #c2392b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17130f;
+    --surface: #221c16;
+    --surface-2: #2c251e;
+    --ink: #f3ebe1;
+    --ink-soft: #b3a594;
+    --line: #3a3128;
+    --brand: #ef7556;
+    --brand-ink: #1b120c;
+    --accent: #52b09b;
+    --warn: #e0a63a;
+    --danger: #e5645a;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-accent: var(--accent);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
