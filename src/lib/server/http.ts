@@ -1,4 +1,5 @@
 import "server-only";
+import { ConfigError } from "./env";
 
 export class HttpError extends Error {
   constructor(
@@ -25,6 +26,7 @@ export function handle<A extends unknown[]>(fn: (...args: A) => Promise<unknown>
         return Response.json({ error: e.message, ...e.extra }, { status: e.status });
       }
       console.error(e);
+      if (e instanceof ConfigError) return Response.json({ error: e.message }, { status: 500 });
       return Response.json({ error: "서버 오류가 발생했어요. 잠시 후 다시 시도해 주세요." }, { status: 500 });
     }
   };

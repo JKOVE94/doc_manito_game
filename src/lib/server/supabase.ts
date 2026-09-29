@@ -4,9 +4,9 @@ import { env } from "./env";
 
 let client: SupabaseClient | null = null;
 
-/** service_role 클라이언트 — 서버 전용. 절대 클라이언트 번들로 가져가지 말 것 */
+/** secret key(service_role 권한) 클라이언트 — 서버 전용. 절대 클라이언트 번들로 가져가지 말 것 */
 export function db(): SupabaseClient {
-  client ??= createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
+  client ??= createClient(env.supabaseUrl, env.supabaseSecretKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   return client;

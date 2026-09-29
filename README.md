@@ -14,7 +14,8 @@ AI 스무고개 힌트(Gemini), 거짓·진실 게임 타이머, 시크릿 히�
 ## 배포 (Vercel + Supabase)
 
 1. **Supabase** 프로젝트 생성 → SQL Editor 에 [`supabase/schema.sql`](supabase/schema.sql) 전체 실행 (재실행 안전).
-2. Project Settings > API 에서 URL / anon key / service_role key 확인.
+2. Project Settings > API Keys 에서 URL / **Publishable key**(`sb_publishable_…`) / **Secret key**(`sb_secret_…`) 확인.
+   - 환경변수: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` (레거시 `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` 도 인식)
 3. **Vercel** 에 이 저장소 import → Environment Variables 에 `.env.example` 항목 입력 → Deploy.
    - `GEMINI_API_KEY` ([Google AI Studio](https://aistudio.google.com/apikey)) 를 넣으면 AI 스무고개 힌트 활성화. 비우면 기능만 꺼짐.
    - `SESSION_SECRET`: `openssl rand -base64 32`
@@ -28,7 +29,7 @@ cp .env.example .env.local   # 값 채우기
 npm run dev
 ```
 
-로컬 Supabase(Docker) 사용 시: `npx supabase start` → 출력된 API URL / anon / service_role 키를 `.env.local` 에.
+로컬 Supabase(Docker) 사용 시: `npx supabase start` → 출력된 API URL / Publishable / Secret 키를 `.env.local` 에.
 (`supabase/migrations/` 에 스키마가 들어 있어 자동 적용됨)
 
 ```bash
@@ -56,6 +57,6 @@ npm run lint
 ## 보안 모델
 
 모든 테이블 RLS ON · 정책 없음 → 브라우저의 anon 키로는 매칭/키워드를 읽을 수 없음.
-데이터는 서버 Route Handler 가 service_role 로만 접근하며, 참가자별로 필요한 정보만 가공해 응답.
+데이터는 서버 Route Handler 가 secret key(service_role 권한)로만 접근하며, 참가자별로 필요한 정보만 가공해 응답.
 `game_sessions` 만 anon 읽기 허용(비밀 정보 없음) → Realtime 변경 신호로 사용.
 >>>>>>> 0ed298d (feat: 대현목장 시크릿 마니또 파티 웹앱)
