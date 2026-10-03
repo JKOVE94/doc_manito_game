@@ -20,6 +20,7 @@ import { TruthLiePanel } from "@/components/play/TruthLiePanel";
 import { BetPanel } from "@/components/play/BetPanel";
 import { GuessCard } from "@/components/play/GuessCard";
 import { EndingView } from "@/components/play/EndingView";
+import { AwayControl } from "@/components/play/AwayControl";
 
 type ActiveTab = "target" | "missions" | "mailbox" | "truthLie" | "bet";
 
@@ -38,6 +39,7 @@ export default function PlayPage() {
   const [jokerModalOpen, setJokerModalOpen] = useState(false);
   const [dismissedPendingQuiz, setDismissedPendingQuiz] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [showAwayConfirm, setShowAwayConfirm] = useState(false);
 
   // 1. Auth check: 401 -> redirect to login
   useEffect(() => {
@@ -166,16 +168,37 @@ export default function PlayPage() {
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            onClick={handleLogout}
-            loading={loggingOut}
-            disabled={loggingOut}
-            className="!min-h-9 !px-2.5 text-xs text-ink-soft hover:text-ink"
-          >
-            로그아웃
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {isDashboardMode && !data.me.awaySince && (
+              <AwayControl.Button
+                onClick={() => setShowAwayConfirm((prev) => !prev)}
+                active={showAwayConfirm}
+              />
+            )}
+            <Button
+              variant="ghost"
+              onClick={handleLogout}
+              loading={loggingOut}
+              disabled={loggingOut}
+              className="!min-h-9 !px-2.5 text-xs text-ink-soft hover:text-ink"
+            >
+              로그아웃
+            </Button>
+          </div>
         </header>
+
+        {/* AwayControl: 자리비움 배너 / 인라인 확인 (ACTIVE / GUESSING) */}
+        {isDashboardMode && (
+          <div className={data.me.awaySince || showAwayConfirm ? "mb-4" : ""}>
+            <AwayControl
+              awaySince={data.me.awaySince}
+              clockOffsetMs={clockOffsetMs}
+              refresh={refresh}
+              confirming={showAwayConfirm}
+              onCloseConfirm={() => setShowAwayConfirm(false)}
+            />
+          </div>
+        )}
 
         {/* View Mode 1: READY (사전 준비 뷰) */}
         {sessionStatus === "READY" && (

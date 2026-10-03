@@ -12,6 +12,7 @@ import type {
   TruthLieRevealRow,
 } from "@/lib/types";
 import { buildAskView } from "./ask";
+import { awaySince, listAwayPeriods, missionDeadlineFor } from "./away";
 import { unauthorized } from "./http";
 import { buildMailbox } from "./mail";
 import { ensureQuiz, quizStats } from "./quiz";
@@ -19,7 +20,6 @@ import {
   betCorrect,
   type ChainRow,
   getSession,
-  isMissionActive,
   type KeywordRow,
   listBets,
   listChains,
@@ -104,11 +104,13 @@ export async function buildParticipantState(participantId: string): Promise<Part
   if (!me) throw unauthorized("세션이 초기화되었어요. 다시 입장해 주세요.");
 
   const started = session.status !== "READY";
-  const [lies, chains, missions] = await Promise.all([
+  const [lies, chains, missions, awayMap] = await Promise.all([
     listTruthLie(session.id),
     started ? listChains(session.id) : Promise.resolve([] as ChainRow[]),
     started ? listMissions(session.id) : Promise.resolve([]),
+    started ? listAwayPeriods(session.id, me.id) : Promise.resolve(new Map()),
   ]);
+  const myAway = awayMap.get(me.id);
   const giveChain = chains.find((c) => c.giver_id === me.id) ?? null; // 나 → 내가 섬기는 사람
   const recvChain = chains.find((c) => c.receiver_id === me.id) ?? null; // 비밀 마니또 → 나
 
@@ -136,7 +138,7 @@ export async function buildParticipantState(participantId: string): Promise<Part
       : null;
 
   // ---- 퀴즈 (포인트 계산 전에 lazy 생성·만료 처리)
-  const quiz = started ? await ensureQuiz(session, me, participants.map((p) => p.name)) : null;
+  const quiz = started ? await ensureQuiz(session, me, participants.map((p) => p.name), !!awaySince(myAway)) : null;
 
   // ---- 나를 섬기는 비밀 마니또 (정체 비공개)
   let manito: ParticipantState["manito"] = null;
@@ -160,13 +162,17 @@ export async function buildParticipantState(participantId: string): Promise<Part
     .filter((m) => m.opened_at)
     .map((m) => {
       const sub = mySubs.get(m.id);
+      const mine = missionDeadlineFor(m, myAway);
       return {
         slot: m.hour_slot,
         title: m.title,
         description: m.description,
         openedAt: m.opened_at,
         deadline: m.deadline_time,
-        isActive: session.status === "ACTIVE" && isMissionActive(m) && sub?.status !== "APPROVED",
+        myDeadline: mine.deadline,
+        graceSec: mine.graceSec,
+        isActive:
+          session.status === "ACTIVE" && !!mine.deadline && Date.parse(mine.deadline) > Date.now() && sub?.status !== "APPROVED",
         mySubmission: sub
           ? { status: sub.status, note: sub.note, photoUrl: sub.photo_path ? (photoUrls.get(sub.photo_path) ?? null) : null }
           : null,
@@ -231,6 +237,7 @@ export async function buildParticipantState(participantId: string): Promise<Part
       name: me.name,
       keywords: [...kwOf(me.id).values()].map((k) => ({ slot: k.slot_index, value: k.keyword_value })),
       lieTurn: lies.find((l) => l.participant_id === me.id)?.lie_turn ?? null,
+      awaySince: awaySince(myAway),
     },
     keywordSlots: KEYWORD_SLOTS,
     target,
@@ -251,7 +258,7 @@ export async function buildParticipantState(participantId: string): Promise<Part
 // =====================================================================
 export async function buildAdminState(): Promise<AdminState> {
   const session = await getSession();
-  const [participants, lies, chains, missions, bets, tmi, quiz] = await Promise.all([
+  const [participants, lies, chains, missions, bets, tmi, quiz, awayAll] = await Promise.all([
     listParticipants(session.id),
     listTruthLie(session.id),
     listChains(session.id),
@@ -259,6 +266,7 @@ export async function buildAdminState(): Promise<AdminState> {
     listBets(session.id),
     tmiSummary(session.id),
     quizStats(session.id),
+    listAwayPeriods(session.id),
   ]);
   const people = new Map(participants.map((p) => [p.id, p]));
   const [keywords, submissions] = await Promise.all([
@@ -293,6 +301,7 @@ export async function buildAdminState(): Promise<AdminState> {
       hasBet: betBy.has(p.id),
       hasGuess: !!guessBy.get(p.id),
       quizScore: quiz.scoreBy.get(p.id) ?? 0,
+      awaySince: awaySince(awayAll.get(p.id)),
       createdAt: p.created_at,
     })),
     missions: missions.map((m) => ({

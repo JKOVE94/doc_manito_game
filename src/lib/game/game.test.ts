@@ -170,3 +170,40 @@ describe("buildTmiQuiz", () => {
     expect(q.options).not.toContain("다솜");
   });
 });
+
+import { personalDeadline } from "./away";
+
+describe("personalDeadline (away grace)", () => {
+  const m = 60_000;
+  const open = 0;
+  const due = 60 * m;
+  const buffer = 10 * m;
+
+  it("no away → unchanged", () => {
+    expect(personalDeadline(open, due, [], 30 * m, buffer)).toEqual({ deadline: due, graceMs: 0 });
+  });
+
+  it("left 10 min before deadline, back an hour later → remaining 10 min preserved + buffer", () => {
+    const r = personalDeadline(open, due, [{ startedAt: 50 * m, endedAt: 110 * m }], 120 * m, buffer);
+    expect(r.deadline).toBe(110 * m + 10 * m + buffer);
+  });
+
+  it("still away → deadline keeps moving with now", () => {
+    const r1 = personalDeadline(open, due, [{ startedAt: 50 * m, endedAt: null }], 70 * m, buffer);
+    const r2 = personalDeadline(open, due, [{ startedAt: 50 * m, endedAt: null }], 90 * m, buffer);
+    expect(r2.deadline - r1.deadline).toBe(20 * m);
+  });
+
+  it("away before the mission opened counts only from opening; away after deadline ignored", () => {
+    expect(personalDeadline(open + 30 * m, due, [{ startedAt: 0, endedAt: 40 * m }], 50 * m, buffer).graceMs).toBe(10 * m + buffer);
+    expect(personalDeadline(open, due, [{ startedAt: 70 * m, endedAt: 80 * m }], 90 * m, buffer).graceMs).toBe(0);
+  });
+
+  it("multiple periods accumulate, including one that starts inside the extended window", () => {
+    const r = personalDeadline(open, due, [
+      { startedAt: 10 * m, endedAt: 20 * m },
+      { startedAt: 65 * m, endedAt: 75 * m }, // 원래 마감 이후지만 연장된 마감(70분) 전에 시작
+    ], 100 * m, buffer);
+    expect(r.graceMs).toBe(20 * m + buffer);
+  });
+});

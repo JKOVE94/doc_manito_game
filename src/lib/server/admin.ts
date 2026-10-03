@@ -124,6 +124,7 @@ export async function resetGame(keepParticipants: boolean): Promise<void> {
   must(await db().from("tmi_quizzes").delete().eq("session_id", sid), "reset quizzes");
   must(await db().from("ai_questions").delete().eq("session_id", sid), "reset ai questions");
   must(await db().from("mails").delete().eq("session_id", sid), "reset mails");
+  must(await db().from("away_periods").delete().eq("session_id", sid), "reset away");
   if (keepParticipants) {
     must(await db().from("participants").update({ next_quiz_at: null }).eq("session_id", sid), "reset quiz schedule");
   }

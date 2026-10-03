@@ -158,12 +158,13 @@ export function MissionList({
         const isPending = submission?.status === "PENDING";
         const isRejected = submission?.status === "REJECTED";
 
-        // Deadline calculation
+        // Deadline calculation using myDeadline (personal deadline reflecting away periods)
+        const effectiveDeadline = mission.myDeadline ?? mission.deadline;
         let deadlineLabel: string | null = null;
         let isExpired = false;
 
-        if (mission.deadline) {
-          const deadlineTime = new Date(mission.deadline).getTime();
+        if (effectiveDeadline) {
+          const deadlineTime = new Date(effectiveDeadline).getTime();
           const diffMs = deadlineTime - now;
           if (diffMs <= 0) {
             isExpired = true;
@@ -180,6 +181,12 @@ export function MissionList({
           }
         }
 
+        // Active determination based on myDeadline, isActive flag, and approval status
+        const isMissionActive =
+          mission.isActive &&
+          (!effectiveDeadline || new Date(effectiveDeadline).getTime() > now) &&
+          !isApproved;
+
         const step = submittingStep[mission.slot] ?? null;
         const isSubmitting = step !== null;
         const currentPreview = previews[mission.slot] ?? null;
@@ -188,24 +195,29 @@ export function MissionList({
           <Card
             key={mission.slot}
             className={`flex flex-col gap-3 transition ${
-              mission.isActive
+              isMissionActive
                 ? "border-brand/40 shadow-sm"
                 : "border-line bg-surface/90"
             }`}
           >
-            {/* Header: Slot + Status */}
+            {/* Header: Slot + Title + Grace Badge + Status */}
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="rounded-lg bg-surface-2 px-2 py-1 text-xs font-bold text-ink">
                   #{mission.slot}
                 </span>
                 <h3 className="text-base font-bold text-ink">
                   {mission.title}
                 </h3>
+                {mission.graceSec > 0 && (
+                  <Badge tone="accent">
+                    ⏳ 유예 +{Math.round(mission.graceSec / 60)}분
+                  </Badge>
+                )}
               </div>
 
               {/* Status Badge */}
-              <div>
+              <div className="shrink-0">
                 {isApproved ? (
                   <Badge tone="accent">승인 ✅</Badge>
                 ) : isPending ? (
@@ -289,7 +301,7 @@ export function MissionList({
             )}
 
             {/* Submission Form (Active and Not Approved) */}
-            {mission.isActive && (
+            {isMissionActive && (
               <form
                 onSubmit={(e) => {
                   e.preventDefault();

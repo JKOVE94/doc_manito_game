@@ -66,3 +66,6 @@ export const BOT_KEYWORD_POOL: [string[], string[], string[]] = [
   ["클라이밍", "베이킹", "러닝크루", "보드게임", "필름카메라", "캠핑"],
   ["기타 연주", "손글씨", "요리", "사진", "찬양 인도", "그림"],
 ];
+
+/** 자리비움 복귀 버퍼(분): 자리비움으로 마감이 연장된 미션에 추가로 주는 시간 */
+export const AWAY_RETURN_BUFFER_MIN = 10;

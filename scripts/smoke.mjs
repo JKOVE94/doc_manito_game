@@ -154,6 +154,31 @@ assert.equal(s.manito.unlockedLevel, 1);
 if (photoPath) assert.ok(s.missions[0].mySubmission.photoUrl);
 step(photoPath ? "mission photo upload (private bucket, signed URL) + approval → points 2" : "mission (no storage env, photo skipped) → points 2");
 
+// 자리비움: 마감 연장 + 퀴즈 중단
+await admin("/api/admin/mission/open", { slot: 2, durationMin: 1 });
+await admin("/api/admin/quiz", { action: "send-now" });
+assert.ok((await p0.call("/api/me/state")).quiz.pending, "quiz pending before away");
+await p0.call("/api/me/away", { away: true });
+s = await p0.call("/api/me/state");
+assert.ok(s.me.awaySince);
+assert.equal(s.quiz.pending, null, "pending quiz cancelled while away");
+const m2 = s.missions.find((x) => x.slot === 2);
+assert.ok(m2.graceSec >= 600, "grace includes 10 min return buffer");
+assert.ok(Date.parse(m2.myDeadline) > Date.parse(m2.deadline));
+await admin("/api/admin/mission/close", { slot: 2 }); // 공통 마감 지남
+s = await p0.call("/api/me/state");
+assert.equal(s.missions.find((x) => x.slot === 2).isActive, true, "still open for the away person");
+assert.equal((await players[1].call("/api/me/state")).missions.find((x) => x.slot === 2).isActive, false);
+await p0.call("/api/me/mission", { slot: 2, note: "복귀 후 제출" });
+await admin("/api/admin/away", { participantId: p0.id, away: false });
+assert.equal((await p0.call("/api/me/state")).me.awaySince, null);
+a = await admin("/api/admin/state");
+assert.equal(a.participants.find((x) => x.id === p0.id).awaySince, null);
+await admin("/api/admin/away", { participantId: players[1].id, away: true });
+assert.ok((await admin("/api/admin/state")).participants.find((x) => x.id === players[1].id).awaySince);
+await admin("/api/admin/away", { participantId: players[1].id, away: false });
+step("away: quiz paused, personal deadline extended past close (+10min buffer), admin toggle");
+
 // 질문 우편함
 const tgt = players.find((p) => p.id === target.id);
 const gv = players.find((p) => p.id === giver.id);

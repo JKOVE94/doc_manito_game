@@ -69,3 +69,13 @@
 | POST | `/api/me/guess` | `{ participantId }` | `{ ok }` | **나를 섬긴 비밀 마니또** 지목 |
 | POST | `/api/admin/tmi` | `{ text }` | `{ ok, factCount }` | TMI 전체 교체. 형식: JSON `[{name, fact}]` 또는 줄마다 `이름: TMI` (`이름 \| TMI`, 탭 구분도 가능) |
 | POST | `/api/admin/quiz` | `{ action: 'send-now' }` | `{ ok }` | 전원에게 즉시 퀴즈 발송 (대기 중 퀴즈 없는 사람) |
+
+### 자리비움 (2026-10-03)
+| Method | Path | Body | Response | 비고 |
+|---|---|---|---|---|
+| POST | `/api/me/away` | `{ away: boolean }` | `{ ok }` | 본인이 자리비움 설정/복귀 |
+| POST | `/api/admin/away` | `{ participantId, away: boolean }` | `{ ok }` | 호스트가 대신 설정/복귀 |
+
+- 유예 규칙: 미션별 **나의 마감** = 공통 마감 + (그 미션이 열려 있던 동안 자리비움한 시간) + 복귀 버퍼 10분(유예가 있을 때만). `MissionView.myDeadline`, `graceSec`.
+- 자리비움 중에는 수시 퀴즈가 오지 않고, 대기 중 퀴즈는 취소(오답 처리 안 함).
+- `ParticipantState.me.awaySince`, `AdminParticipantRow.awaySince`.

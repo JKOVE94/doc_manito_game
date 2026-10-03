@@ -12,13 +12,13 @@ import {
   getChainByReceiver,
   getSession,
   type HintQuiz,
-  isMissionActive,
   listKeywords,
   listMissions,
   listParticipants,
   type ParticipantRow,
   type SessionRow,
 } from "./repo";
+import { isMissionActiveFor, listAwayPeriods } from "./away";
 import { photoPrefix } from "./storage";
 import { db, must } from "./supabase";
 
@@ -153,7 +153,8 @@ export async function submitMission(
   await requireChain(session, me);
   if (session.status !== "ACTIVE") throw conflict("지금은 미션을 제출할 수 없어요.");
   const mission = (await listMissions(session.id)).find((m) => m.hour_slot === slot);
-  if (!mission || !isMissionActive(mission)) throw conflict("진행 중인 미션이 아니에요.");
+  const myAway = (await listAwayPeriods(session.id, me.id)).get(me.id);
+  if (!mission || !isMissionActiveFor(mission, myAway)) throw conflict("진행 중인 미션이 아니에요. (마감됨)");
   if (!note && !photoPath) throw badRequest("인증 사진이나 메모 중 하나는 꼭 남겨 주세요.");
   if (photoPath && !photoPath.startsWith(photoPrefix(session.id, me.id))) throw badRequest("사진 경로가 올바르지 않아요.");
 

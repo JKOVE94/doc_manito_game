@@ -67,8 +67,12 @@ export interface MissionView {
   description: string;
   openedAt: string | null;
   deadline: string | null;
-  /** 지금 제출 가능한지 (오픈됨 && 마감 전 && 미승인) */
+  /** 지금 제출 가능한지 (오픈됨 && 내 마감 전 && 미승인) */
   isActive: boolean;
+  /** 자리비움 유예가 반영된 나의 마감 시각 (유예 없으면 deadline 과 같음) */
+  myDeadline: string | null;
+  /** 자리비움으로 늘어난 시간(초). 0 이면 유예 없음 */
+  graceSec: number;
   mySubmission: { status: SubmissionStatus; note: string; photoUrl: string | null } | null;
 }
 
@@ -216,6 +220,8 @@ export interface ParticipantState {
     name: string;
     keywords: { slot: number; value: string }[]; // 내가 입력한 키워드
     lieTurn: number | null;
+    /** 자리비움 상태 (null = 자리에 있음) */
+    awaySince: string | null;
   };
   keywordSlots: KeywordSlotView[];
   /** ACTIVE 이후에만 존재 */
@@ -255,6 +261,8 @@ export interface AdminParticipantRow {
   hasBet: boolean;
   hasGuess: boolean;
   quizScore: number;
+  /** 자리비움 시작 시각 (null = 자리에 있음) */
+  awaySince: string | null;
   createdAt: string;
 }
 

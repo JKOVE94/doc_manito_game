@@ -19,8 +19,28 @@ export function ParticipantTable({
   const [showLieNumbers, setShowLieNumbers] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [awayLoadingId, setAwayLoadingId] = useState<string | null>(null);
   const [impersonateLoadingId, setImpersonateLoadingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleToggleAway = async (participantId: string, currentAway: boolean) => {
+    setAwayLoadingId(participantId);
+    setErrorMsg(null);
+    try {
+      await api("/api/admin/away", { participantId, away: !currentAway });
+      await onRefresh();
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setErrorMsg(err.message);
+      } else if (err instanceof Error) {
+        setErrorMsg(err.message);
+      } else {
+        setErrorMsg("자리비움 상태 변경에 실패했습니다.");
+      }
+    } finally {
+      setAwayLoadingId(null);
+    }
+  };
 
   const handleImpersonate = async (participantId: string) => {
     setImpersonateLoadingId(participantId);
@@ -97,8 +117,10 @@ export function ParticipantTable({
                 <th className="px-3 py-2.5 text-center">퀴즈</th>
                 <th className="px-3 py-2.5 text-center">배팅</th>
                 <th className="px-3 py-2.5 text-center">추리</th>
-                {sessionStatus === "READY" && (
-                  <th className="px-3 py-2.5 text-right">관리</th>
+                {(sessionStatus === "READY" || sessionStatus === "ACTIVE" || sessionStatus === "GUESSING") && (
+                  <th className="px-3 py-2.5 text-right">
+                    {sessionStatus === "READY" ? "관리" : "자리비움"}
+                  </th>
                 )}
               </tr>
             </thead>
@@ -112,6 +134,7 @@ export function ParticipantTable({
                     <td className="px-3 py-3 font-semibold text-ink">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span>{p.name}</span>
+                        {p.awaySince && <Badge tone="warn">자리비움</Badge>}
                         {p.isBot && <Badge tone="warn">봇</Badge>}
                         {p.isBot && (
                           <Button
@@ -203,6 +226,25 @@ export function ParticipantTable({
                             삭제
                           </Button>
                         )}
+                      </td>
+                    )}
+
+                    {(sessionStatus === "ACTIVE" || sessionStatus === "GUESSING") && (
+                      <td className="px-3 py-3 text-right whitespace-nowrap">
+                        <Button
+                          type="button"
+                          variant={p.awaySince ? "primary" : "secondary"}
+                          loading={awayLoadingId === p.id}
+                          disabled={awayLoadingId !== null}
+                          onClick={() => handleToggleAway(p.id, Boolean(p.awaySince))}
+                          className={`min-h-8 px-2.5 py-1 text-xs ${
+                            p.awaySince
+                              ? "!bg-warn !text-ink hover:brightness-105"
+                              : "text-ink hover:bg-surface-2"
+                          }`}
+                        >
+                          {p.awaySince ? "복귀" : "자리비움"}
+                        </Button>
                       </td>
                     )}
                   </tr>

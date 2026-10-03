@@ -47,7 +47,12 @@ async function listMyQuizzes(sessionId: string, participantId: string): Promise<
  * - 만료된 미응답 퀴즈 → 오답 처리 후 다음 퀴즈 예약
  * - 예약 시각이 지났으면 새 퀴즈 생성 (참가자당 미응답 1개: DB 부분 unique 인덱스로 보장)
  */
-export async function ensureQuiz(session: SessionRow, me: ParticipantRow, participantNames: string[]): Promise<QuizView> {
+export async function ensureQuiz(
+  session: SessionRow,
+  me: ParticipantRow,
+  participantNames: string[],
+  isAway = false,
+): Promise<QuizView> {
   let rows = await listMyQuizzes(session.id, me.id);
   const now = Date.now();
   let pending = rows.find((q) => !q.answered_at) ?? null;
@@ -61,7 +66,7 @@ export async function ensureQuiz(session: SessionRow, me: ParticipantRow, partic
     pending = null;
     await setNext(me.id, nextQuizAt());
     rows = await listMyQuizzes(session.id, me.id);
-  } else if (session.status === "ACTIVE" && !pending) {
+  } else if (session.status === "ACTIVE" && !pending && !isAway) {
     if (!me.next_quiz_at) {
       await setNext(me.id, firstQuizAt());
     } else if (new Date(me.next_quiz_at).getTime() <= now) {
