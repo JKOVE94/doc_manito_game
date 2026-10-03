@@ -79,3 +79,11 @@
 - 유예 규칙: 미션별 **나의 마감** = 공통 마감 + (그 미션이 열려 있던 동안 자리비움한 시간) + 복귀 버퍼 10분(유예가 있을 때만). `MissionView.myDeadline`, `graceSec`.
 - 자리비움 중에는 수시 퀴즈가 오지 않고, 대기 중 퀴즈는 취소(오답 처리 안 함).
 - `ParticipantState.me.awaySince`, `AdminParticipantRow.awaySince`.
+
+### 관리자 비밀번호 DB 관리 (2026-10-03)
+| Method | Path | Body | Response | 비고 |
+|---|---|---|---|---|
+| GET | `/api/admin/status` | – | `{ needsSetup: boolean }` | 로그인 불필요. DB·환경변수 어디에도 비밀번호가 없으면 true |
+| POST | `/api/admin/setup` | `{ password }` (4~100자) | `{ ok }` | needsSetup 일 때만. 비밀번호 저장 + 바로 로그인 |
+| POST | `/api/admin/password` | `{ currentPassword, newPassword }` | `{ ok }` | 관리자 로그인 필요. 변경 즉시 다른 기기 관리자 세션 만료, 현재 기기는 재로그인 처리 |
+- `SESSION_SECRET` 환경변수 불필요 (DB 자동 생성). `ADMIN_PASSWORD` 는 DB 미설정 시 fallback.

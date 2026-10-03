@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { api, ApiRequestError } from "@/lib/client/api";
+import { api } from "@/lib/client/api";
 import { useLiveState } from "@/lib/client/useLiveState";
-import { Button, Card, ErrorText, Input } from "@/components/ui";
+import { Button, Card, ErrorText } from "@/components/ui";
 import type { AdminState } from "@/lib/types";
 
 import { SessionControl } from "@/components/admin/SessionControl";
@@ -16,6 +16,8 @@ import { SubmissionReview } from "@/components/admin/SubmissionReview";
 import { ChainBoard } from "@/components/admin/ChainBoard";
 import { BetController } from "@/components/admin/BetController";
 import { DangerZone } from "@/components/admin/DangerZone";
+import { AdminGate } from "@/components/admin/AdminGate";
+import { AdminPasswordCard } from "@/components/admin/AdminPasswordCard";
 import { TestTools } from "@/components/admin/TestTools";
 
 export default function AdminPage() {
@@ -23,34 +25,8 @@ export default function AdminPage() {
     "/api/admin/state",
   );
 
-  const [password, setPassword] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
   const [logoutLoading, setLogoutLoading] = useState(false);
   const [refreshLoading, setRefreshLoading] = useState(false);
-
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!password.trim()) {
-      setLoginError("비밀번호를 입력해주세요.");
-      return;
-    }
-    setLoginLoading(true);
-    setLoginError(null);
-    try {
-      await api("/api/admin/login", { password });
-      setPassword("");
-      await refresh();
-    } catch (err) {
-      if (err instanceof ApiRequestError) {
-        setLoginError(err.message);
-      } else {
-        setLoginError("로그인에 실패했습니다.");
-      }
-    } finally {
-      setLoginLoading(false);
-    }
-  };
 
   const handleLogout = async () => {
     setLogoutLoading(true);
@@ -74,71 +50,9 @@ export default function AdminPage() {
     }
   };
 
-  // 1. 401 Unauthorized -> Show Host Login Form
+  // 1. 401 → 최초 비밀번호 설정 또는 로그인
   if (error && error.status === 401) {
-    return (
-      <main className="flex min-h-dvh flex-col items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm">
-          <header className="mb-6 text-center">
-            <div className="mb-3 inline-flex items-center justify-center rounded-2xl bg-brand/10 p-3 text-3xl">
-              🛡️
-            </div>
-            <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">
-              호스트 콘솔
-            </h1>
-            <p className="mt-1 text-sm text-ink-soft">
-              관리자 비밀번호를 입력해주세요.
-            </p>
-          </header>
-
-          <Card className="shadow-md">
-            <form onSubmit={handleLogin} className="flex flex-col gap-4">
-              <div>
-                <label
-                  htmlFor="admin-password"
-                  className="mb-1.5 block text-sm font-semibold text-ink"
-                >
-                  비밀번호
-                </label>
-                <Input
-                  id="admin-password"
-                  name="password"
-                  type="password"
-                  placeholder="관리자 비밀번호 입력"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoFocus
-                  autoComplete="current-password"
-                  disabled={loginLoading}
-                />
-              </div>
-
-              <ErrorText>{loginError}</ErrorText>
-
-              <Button
-                type="submit"
-                variant="primary"
-                loading={loginLoading}
-                disabled={loginLoading || !password.trim()}
-                className="w-full"
-              >
-                관리자 로그인
-              </Button>
-            </form>
-          </Card>
-
-          <footer className="mt-8 text-center">
-            <Link
-              href="/"
-              className="inline-flex min-h-11 items-center justify-center px-4 text-xs font-medium text-ink-soft/80 transition hover:text-ink hover:underline"
-            >
-              ← 참가자 입장 화면으로 돌아가기
-            </Link>
-          </footer>
-        </div>
-      </main>
-    );
+    return <AdminGate onDone={refresh} />;
   }
 
   // 2. Loading state when no data yet
@@ -296,6 +210,9 @@ export default function AdminPage() {
           </div>
 
           {/* 8. DangerZone */}
+          <div className="lg:col-span-2">
+            <AdminPasswordCard onRefresh={refresh} />
+          </div>
           <div className="lg:col-span-2">
             <DangerZone onRefresh={refresh} />
           </div>

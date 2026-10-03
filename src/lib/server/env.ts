@@ -26,11 +26,6 @@ export const env = {
   get supabaseSecretKey() {
     return required("SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY");
   },
-  get sessionSecret() {
-    const v = required("SESSION_SECRET");
-    if (v.length < 16) throw new ConfigError("서버 설정 오류: SESSION_SECRET 은 16자 이상이어야 합니다.");
-    return v;
-  },
   /** 없으면 AI 힌트 기능 비활성화 */
   get geminiApiKey(): string | null {
     return read("GEMINI_API_KEY") ?? null;
@@ -41,8 +36,5 @@ export const env = {
   /** 테스트용 목 서버 지정 시에만 사용 */
   get geminiBaseUrl(): string {
     return read("GEMINI_BASE_URL") ?? "https://generativelanguage.googleapis.com";
-  },
-  get adminPassword() {
-    return required("ADMIN_PASSWORD");
   },
 };

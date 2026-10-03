@@ -292,3 +292,11 @@ create table if not exists public.away_periods (
 create unique index if not exists away_periods_one_open on public.away_periods (participant_id) where ended_at is null;
 create index if not exists away_periods_session_idx on public.away_periods (session_id, participant_id);
 alter table public.away_periods enable row level security;
+
+-- 앱 설정 (관리자 비밀번호 해시, 세션 서명 키 등). service_role 전용
+create table if not exists public.app_settings (
+  key         text primary key,
+  value       text not null,
+  updated_at  timestamptz not null default now()
+);
+alter table public.app_settings enable row level security;

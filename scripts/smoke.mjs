@@ -34,6 +34,19 @@ await admin("/api/admin/login", { password: ADMIN_PASSWORD });
 await admin("/api/admin/session", { action: "reset", confirm: "RESET", keepParticipants: false });
 step("admin login + reset");
 
+// 관리자 비밀번호 DB 관리: 변경 시 다른 기기 세션 만료
+assert.equal((await client()("/api/admin/status")).needsSetup, false);
+await client()("/api/admin/setup", { password: "hijack" }, 409); // 이미 설정됨 → 탈취 불가
+const otherDevice = client();
+await otherDevice("/api/admin/login", { password: ADMIN_PASSWORD });
+await admin("/api/admin/password", { currentPassword: "wrong", newPassword: "temp-pass" }, 401);
+await admin("/api/admin/password", { currentPassword: ADMIN_PASSWORD, newPassword: "temp-pass" });
+await otherDevice("/api/admin/state", undefined, 401);
+await admin("/api/admin/state"); // 변경한 기기는 유지
+await client()("/api/admin/login", { password: ADMIN_PASSWORD }, 401);
+await admin("/api/admin/password", { currentPassword: "temp-pass", newPassword: ADMIN_PASSWORD });
+step("admin password in DB: change invalidates other sessions, setup can't hijack");
+
 const names = ["가영", "나래", "다솜", "라희", "마루"];
 const keywordSets = [
   ["피아노", "러닝", "요리"],
