@@ -9,6 +9,7 @@ interface SessionControlProps {
   session: {
     status: SessionStatus;
     startedAt: string | null;
+    readyCount: number;
     minParticipants: number;
     canStart: boolean;
   };
@@ -98,6 +99,11 @@ export function SessionControl({
           <span className="font-semibold text-ink">참가자 현황:</span>
           <span className="font-bold text-brand">{participantsCount}명</span>
           <span className="text-xs text-ink-soft">/ 최소 {session.minParticipants}명</span>
+          {session.status === "READY" && (
+            <Badge tone={session.readyCount === participantsCount && participantsCount > 0 ? "accent" : "warn"}>
+              준비 {session.readyCount}/{participantsCount}
+            </Badge>
+          )}
         </div>
         {session.startedAt && (
           <div className="text-xs text-ink-soft">

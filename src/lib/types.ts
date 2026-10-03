@@ -220,6 +220,8 @@ export interface ParticipantState {
     participantCount: number;
     /** 게임 시작 시각 (셔플 공개 연출을 판마다 한 번만 보여주는 키) */
     startedAt: string | null;
+    /** 준비 완료한 참가자 수 (READY 단계 대기 화면용) */
+    readyCount: number;
   };
   /** 참가자 이름 목록 (셔플 연출용, 나 포함) */
   roster: string[];
@@ -228,6 +230,8 @@ export interface ParticipantState {
     name: string;
     keywords: { slot: number; value: string }[]; // 내가 입력한 키워드
     lieTurn: number | null;
+    /** 준비 완료 여부 (READY 단계) */
+    isReady: boolean;
     /** 자리비움 상태 (null = 자리에 있음) */
     awaySince: string | null;
   };
@@ -263,6 +267,7 @@ export interface AdminParticipantRow {
   id: string;
   name: string;
   isBot: boolean; // 테스트 모드 봇
+  isReady: boolean; // 준비 완료
   alias: string | null;
   keywordCount: number; // 0~3
   lieTurn: number | null;
@@ -325,6 +330,8 @@ export interface AdminState {
   session: {
     status: SessionStatus;
     startedAt: string | null;
+    /** 준비 완료한 참가자 수 */
+    readyCount: number;
     /** 미션 랜덤 자동 오픈 사용 여부 */
     missionAuto: boolean;
     /** 다음 미션 자동 오픈 예정 시각 (없으면 null) */

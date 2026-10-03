@@ -37,6 +37,7 @@ export interface ParticipantRow {
   pin_hash: string;
   alias: string | null;
   is_bot: boolean;
+  is_ready: boolean;
   failed_pin_attempts: number;
   next_quiz_at: string | null;
   locked_until: string | null;

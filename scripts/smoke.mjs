@@ -62,12 +62,31 @@ for (const [i, name] of names.entries()) {
   players.push({ name, id: participantId, call, kw: keywordSets[i] });
 }
 await client()("/api/auth/join", { name: "가영", pin: "9999" }, 401);
+let a;
+// 준비 흐름: 거짓말 순번은 선택 사항. 키워드 저장 후 [준비], 수정하면 준비 해제, 키워드 없이는 준비 불가
+await players[4].call("/api/me/ready", { ready: true }, 409);
 for (const [i, p] of players.entries()) {
-  if (i < 4) await p.call("/api/me/keywords", { keywords: p.kw });
-  await p.call("/api/me/lie-turn", { lieTurn: (i % 4) + 1 });
+  if (i < 4) {
+    await p.call("/api/me/keywords", { keywords: p.kw });
+    await p.call("/api/me/ready", { ready: true });
+  }
 }
+let st = await players[0].call("/api/me/state");
+assert.equal(st.me.isReady, true);
+assert.equal(st.session.readyCount, 4);
+assert.equal(st.me.lieTurn, null, "lie turn is optional");
+await players[0].call("/api/me/keywords", { keywords: players[0].kw }); // 수정 → 준비 해제
+assert.equal((await players[0].call("/api/me/state")).me.isReady, false);
+await players[0].call("/api/me/ready", { ready: true });
+a = await admin("/api/admin/state");
+assert.equal(a.session.readyCount, 4);
+assert.equal(a.participants.find((x) => x.name === "마루").isReady, false);
 assert.deepEqual((await admin("/api/admin/session", { action: "start" }, 409)).missing, ["마루"]);
 await players[4].call("/api/me/keywords", { keywords: players[4].kw });
+await players[4].call("/api/me/ready", { ready: true });
+// 거짓말 순번은 게임 시작 후 거짓·진실 탭에서 설정
+for (const [i, p] of players.entries()) await p.call("/api/me/lie-turn", { lieTurn: (i % 4) + 1 });
+step("ready flow: lie turn optional, edit un-readies, can't ready without keywords, host sees who's missing");
 
 // TMI 데이터 (게임 전 업로드)
 const tmiLines = [
@@ -80,7 +99,7 @@ const tmiLines = [
 ];
 const tmiRes = await admin("/api/admin/tmi", { text: tmiLines.join("\n") });
 assert.equal(tmiRes.factCount, 6);
-let a = await admin("/api/admin/state");
+a = await admin("/api/admin/state");
 assert.equal(a.tmi.subjects.find((s) => s.name === "마 루").matched, true);
 assert.equal(a.tmi.subjects.find((s) => s.name === "외부인").matched, false);
 step("TMI import (lines/pipe/tab, space-insensitive name match, unmatched flagged)");
@@ -143,7 +162,7 @@ assert.deepEqual(s.target.keywords.map((k) => k.value), target.kw);
 assert.equal(s.manito.unlockedLevel, 0);
 assert.equal(s.manito.maxLevel, 5);
 assert.ok(s.manito.hints.every((h) => h.value === null));
-const raw = JSON.stringify(s);
+const raw = JSON.stringify({ ...s, roster: undefined }); // roster 는 전원 이름 목록(관계 정보 없음)
 assert.ok(!raw.includes(giver.id) && !raw.includes(giver.name), "secret manito must not leak");
 step(`two relations: serve ${target.name} (named) / secret manito hidden`);
 
@@ -312,6 +331,8 @@ const solo = client();
 const { participantId: soloId } = await solo("/api/auth/join", { name: "가영", pin: "4321" });
 await solo("/api/me/keywords", { keywords: ["피아노", "러닝", "요리"] });
 await admin("/api/admin/test/bots", { action: "add", count: 3 });
+assert.deepEqual((await admin("/api/admin/session", { action: "start" }, 409)).missing, ["가영"], "bots are auto-ready; only the real player is missing");
+await solo("/api/me/ready", { ready: true });
 await admin("/api/admin/test/impersonate", { participantId: soloId }, 409);
 await admin("/api/admin/session", { action: "start" });
 await admin("/api/admin/mission/open", { slot: 1, durationMin: 30 });

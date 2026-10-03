@@ -124,6 +124,20 @@ export async function saveKeywords(participantId: string, keywords: string[]): P
     return { participant_id: me.id, slot_index: slot, keyword_value: value, initial_consonants: getInitialConsonants(value) };
   });
   must(await db().from("user_keywords").upsert(rows, { onConflict: "participant_id,slot_index" }), "save keywords");
+  // 키워드를 바꾸면 준비 상태 해제 (다시 확인 후 준비)
+  must(await db().from("participants").update({ is_ready: false }).eq("id", me.id), "unready on edit");
+  await bump(session.id);
+}
+
+/** 준비 완료/취소. 준비하려면 키워드 3개가 모두 저장되어 있어야 함 */
+export async function setReady(participantId: string, ready: boolean): Promise<void> {
+  const { session, me } = await loadMe(participantId);
+  if (session.status !== "READY") throw conflict("이미 게임이 시작되었어요.");
+  if (ready) {
+    const saved = await listKeywords([me.id]);
+    if (saved.length < KEYWORD_SLOTS.length) throw conflict("키워드 3개를 먼저 저장해 주세요.");
+  }
+  must(await db().from("participants").update({ is_ready: ready }).eq("id", me.id), "set ready");
   await bump(session.id);
 }
 

@@ -311,3 +311,6 @@ alter table public.tmi_quizzes add column if not exists subject text;        -- 
 -- 미션 랜덤 자동 오픈 스케줄 (세션 단위)
 alter table public.game_sessions add column if not exists mission_auto boolean not null default true;
 alter table public.game_sessions add column if not exists next_mission_at timestamptz;
+
+-- 준비 완료 (게임 시작 전 참가자가 키워드 입력 후 [준비] 버튼)
+alter table public.participants add column if not exists is_ready boolean not null default false;

@@ -105,11 +105,12 @@ export function ParticipantTable({
         </p>
       ) : (
         <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="w-full min-w-[620px] text-left text-sm">
+          <table className="whitespace-nowrap w-full min-w-[620px] text-left text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-2 text-xs font-semibold text-ink-soft">
                 <th className="px-3 py-2.5">이름</th>
                 <th className="px-3 py-2.5">익명 닉네임</th>
+                <th className="px-3 py-2.5 text-center">준비</th>
                 <th className="px-3 py-2.5 text-center">키워드</th>
                 <th className="px-3 py-2.5 text-center">
                   거짓말 순번 {showLieNumbers ? "(숫자)" : "(입력여부)"}
@@ -157,6 +158,9 @@ export function ParticipantTable({
                       ) : (
                         "-"
                       )}
+                    </td>
+                    <td className="px-3 py-3 text-center">
+                      <Badge tone={p.isReady ? "accent" : "neutral"}>{p.isReady ? "준비 ✅" : "대기"}</Badge>
                     </td>
                     <td className="px-3 py-3 text-center">
                       <Badge tone={p.keywordCount === 3 ? "accent" : p.keywordCount > 0 ? "warn" : "neutral"}>

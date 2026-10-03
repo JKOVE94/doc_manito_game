@@ -11,7 +11,6 @@ import {
   hintPoints,
   getSession,
   listChains,
-  listKeywords,
   firstMissionAt,
   listMissions,
   listParticipants,
@@ -40,12 +39,9 @@ export async function startGame(force: boolean): Promise<void> {
     throw conflict(`최소 ${MIN_PARTICIPANTS}명 이상이어야 시작할 수 있어요. (현재 ${participants.length}명)`);
   }
   if (!force) {
-    const keywords = await listKeywords(participants.map((p) => p.id));
-    const count = new Map<string, number>();
-    for (const k of keywords) count.set(k.participant_id, (count.get(k.participant_id) ?? 0) + 1);
-    const missing = participants.filter((p) => (count.get(p.id) ?? 0) < 3).map((p) => p.name);
-    if (missing.length) {
-      throw conflict(`키워드를 다 입력하지 않은 참가자가 있어요: ${missing.join(", ")}`, { missing });
+    const notReady = participants.filter((p) => !p.is_ready).map((p) => p.name);
+    if (notReady.length) {
+      throw conflict(`아직 준비를 누르지 않은 참가자가 있어요: ${notReady.join(", ")}`, { missing: notReady });
     }
   }
 
@@ -119,7 +115,7 @@ export async function resetGame(keepParticipants: boolean): Promise<void> {
     must(await db().from("manito_chains").delete().eq("session_id", sid), "reset chains");
     must(await db().from("truth_lie_settings").delete().eq("session_id", sid), "reset truth-lie");
     must(await db().from("faction_bets").delete().eq("session_id", sid), "reset bets");
-    must(await db().from("participants").update({ alias: null }).eq("session_id", sid), "reset aliases");
+    must(await db().from("participants").update({ alias: null, is_ready: false }).eq("session_id", sid), "reset aliases");
   } else {
     must(await db().from("participants").delete().eq("session_id", sid), "reset participants");
   }

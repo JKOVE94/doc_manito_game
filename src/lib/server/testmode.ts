@@ -24,7 +24,7 @@ export async function addBots(count: number): Promise<void> {
     const name = `🤖봇${n}`;
     if (names.has(name)) continue;
     // 봇은 PIN 로그인 불가 (무작위 해시) — 호스트 콘솔 '봇으로 보기'로만 접속
-    rows.push({ session_id: session.id, name, is_bot: true, pin_hash: await hashPin(String(randomInt(1e9))) });
+    rows.push({ session_id: session.id, name, is_bot: true, is_ready: true, pin_hash: await hashPin(String(randomInt(1e9))) });
   }
   const bots = must(
     await db().from("participants").insert(rows).select("id"),

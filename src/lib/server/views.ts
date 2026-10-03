@@ -231,13 +231,19 @@ export async function buildParticipantState(participantId: string): Promise<Part
   return {
     serverNow: new Date().toISOString(),
     revision: session.revision,
-    session: { status: session.status, participantCount: participants.length, startedAt: session.started_at },
+    session: {
+      status: session.status,
+      participantCount: participants.length,
+      startedAt: session.started_at,
+      readyCount: participants.filter((p) => p.is_ready).length,
+    },
     roster: participants.map((p) => p.name),
     me: {
       id: me.id,
       name: me.name,
       keywords: [...kwOf(me.id).values()].map((k) => ({ slot: k.slot_index, value: k.keyword_value })),
       lieTurn: lies.find((l) => l.participant_id === me.id)?.lie_turn ?? null,
+      isReady: me.is_ready,
       awaySince: awaySince(myAway),
     },
     keywordSlots: KEYWORD_SLOTS,
@@ -289,6 +295,7 @@ export async function buildAdminState(): Promise<AdminState> {
     session: {
       status: session.status,
       startedAt: session.started_at,
+      readyCount: participants.filter((p) => p.is_ready).length,
       missionAuto: session.mission_auto,
       nextMissionAt: session.status === "ACTIVE" && session.mission_auto ? session.next_mission_at : null,
       minParticipants: MIN_PARTICIPANTS,
@@ -298,6 +305,7 @@ export async function buildAdminState(): Promise<AdminState> {
       id: p.id,
       name: p.name,
       isBot: p.is_bot,
+      isReady: p.is_ready,
       alias: p.alias,
       keywordCount: kwCount.get(p.id) ?? 0,
       lieTurn: lieBy.get(p.id) ?? null,
