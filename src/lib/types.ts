@@ -342,8 +342,8 @@ export interface AdminState {
   tmi: {
     factCount: number;
     quizCount: number; // 빈칸 퀴즈가 있는 TMI 수
-    /** 이름별 TMI 수. matched=false 면 참가자 이름과 일치하지 않아 퀴즈에 안 나옴 */
-    subjects: { name: string; count: number; matched: boolean }[];
+    /** 이름별 TMI 수. 부분 일치로 연결된 참가자 이름(matchedName). matched=false 면 퀴즈에 안 나옴 */
+    subjects: { name: string; count: number; matched: boolean; matchedName: string | null }[];
   };
   quiz: { pendingCount: number; answeredCount: number; correctCount: number };
   /** 테스트 모드 봇 수 (0 이 아니면 콘솔에 경고 표시) */

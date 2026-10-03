@@ -1,6 +1,6 @@
 import "server-only";
 import notionTmi from "@/data/tmi-notion.json";
-import { normalizeName, parseTmiText, type TmiBlankQuiz, type TmiFact } from "@/lib/game/tmi";
+import { matchSubject, parseTmiText, type TmiBlankQuiz, type TmiFact } from "@/lib/game/tmi";
 import { badRequest } from "./http";
 import { bump, getSession, listParticipants } from "./repo";
 import { db, must } from "./supabase";
@@ -22,10 +22,9 @@ export async function listFacts(sessionId: string): Promise<FactRow[]> {
   ) as FactRow[];
 }
 
-/** 특정 인물의 TMI (이름 공백 무시 비교) */
-export function factsAbout(facts: FactRow[], name: string): string[] {
-  const n = normalizeName(name);
-  return facts.filter((f) => normalizeName(f.subject_name) === n).map((f) => f.fact);
+/** 특정 참가자의 TMI (주인공 이름 부분 일치로 연결) */
+export function factsAbout(facts: FactRow[], name: string, participantNames: readonly string[]): string[] {
+  return facts.filter((f) => matchSubject(f.subject_name, participantNames) === name).map((f) => f.fact);
 }
 
 /** 관리자: TMI 전체 교체 */
@@ -46,12 +45,15 @@ export async function replaceFacts(text: string): Promise<{ ok: true; factCount:
 
 export async function tmiSummary(sessionId: string) {
   const [facts, participants] = await Promise.all([listFacts(sessionId), listParticipants(sessionId)]);
-  const names = new Set(participants.map((p) => normalizeName(p.name)));
+  const names = participants.map((p) => p.name);
   const counts = new Map<string, number>();
   for (const f of facts) counts.set(f.subject_name, (counts.get(f.subject_name) ?? 0) + 1);
   return {
     factCount: facts.length,
     quizCount: facts.filter((f) => f.quiz).length,
-    subjects: [...counts].map(([name, count]) => ({ name, count, matched: names.has(normalizeName(name)) })),
+    subjects: [...counts].map(([name, count]) => {
+      const matchedName = matchSubject(name, names);
+      return { name, count, matched: !!matchedName, matchedName };
+    }),
   };
 }

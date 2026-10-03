@@ -175,8 +175,11 @@ export function TmiManager({
               >
                 <span className="font-semibold text-ink">{sub.name}</span>
                 <span className="text-ink-soft">({sub.count}개)</span>
+                {sub.matchedName && sub.matchedName !== sub.name && (
+                  <span className="font-semibold text-accent">→ {sub.matchedName}</span>
+                )}
                 {!sub.matched && (
-                  <Badge tone="warn">참가자 이름과 불일치 — 퀴즈 제외</Badge>
+                  <Badge tone="warn">연결된 참가자 없음 — 퀴즈 제외</Badge>
                 )}
               </div>
             ))}

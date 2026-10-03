@@ -10,7 +10,16 @@ import type { AskAbout, AskEntryView, AskResult, AskVerdict, AskView } from "@/l
 import { env } from "./env";
 import { generateJson } from "./gemini";
 import { badRequest, conflict, HttpError, unauthorized } from "./http";
-import { bump, countApproved, getChainByGiver, getChainByReceiver, getSession, listKeywords, type SessionRow } from "./repo";
+import {
+  bump,
+  countApproved,
+  getChainByGiver,
+  getChainByReceiver,
+  getSession,
+  listKeywords,
+  listParticipants,
+  type SessionRow,
+} from "./repo";
 import { db, must, mustOne } from "./supabase";
 import { factsAbout, listFacts } from "./tmi";
 
@@ -129,13 +138,13 @@ export async function askAI(participantId: string, rawQuestion: string, about: A
     // 내가 섬기는 사람: 이름·키워드·Notion TMI 모두 공개 정보
     const chain = await getChainByGiver(session.id, participantId);
     if (!chain) throw unauthorized("매칭 정보를 찾을 수 없어요.");
-    const [keywords, facts, target] = await Promise.all([
+    const [keywords, facts, participants] = await Promise.all([
       listKeywords([chain.receiver_id]),
       listFacts(session.id),
-      db().from("participants").select("name").eq("id", chain.receiver_id).single<{ name: string }>(),
+      listParticipants(session.id),
     ]);
-    const name = mustOne(target, "load target").name;
-    const tmi = factsAbout(facts, name);
+    const name = participants.find((p) => p.id === chain.receiver_id)?.name ?? "내가 섬기는 친구";
+    const tmi = factsAbout(facts, name, participants.map((p) => p.name));
     system = TARGET_PROMPT;
     profile = [
       `[내가 섬기는 친구] ${name}`,

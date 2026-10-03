@@ -241,3 +241,36 @@ describe("Notion TMI preset + blank quizzes", () => {
     expect(kinds).toEqual(new Set(["WHO", "BLANK"]));
   });
 });
+
+import { matchSubject } from "./tmi";
+
+describe("matchSubject (partial name match)", () => {
+  it("exact match wins, ignoring spaces", () => {
+    expect(matchSubject("김 대현", ["김대현", "대현"])).toBe("김대현");
+  });
+
+  it("matches given name only or full name either way", () => {
+    expect(matchSubject("김대현", ["대현", "아영"])).toBe("대현");
+    expect(matchSubject("대현", ["김대현", "오아영"])).toBe("김대현");
+    expect(matchSubject("오아영", ["아영"])).toBe("아영");
+  });
+
+  it("refuses ambiguous or too-short matches", () => {
+    expect(matchSubject("김대현", ["대현", "김대"])).toBeNull(); // 후보 2명
+    expect(matchSubject("대현", ["김대현", "박대현"])).toBeNull();
+    expect(matchSubject("김대현", ["현"])).toBeNull(); // 1글자
+    expect(matchSubject("외부인", ["대현"])).toBeNull();
+  });
+
+  it("quiz uses partial names and never quizzes the taker about themselves", () => {
+    const facts = [
+      { id: "a", subject_name: "김대현", fact: "독서왕" },
+      { id: "b", subject_name: "오아영", fact: "피자" },
+    ];
+    for (let i = 0; i < 30; i++) {
+      const q = buildTmiQuiz(facts, "대현", ["대현", "아영", "윤진", "순웅"], new Set())!;
+      expect(q.factId).toBe("b");
+      expect(q.options[q.answerIndex]).toBe("아영");
+    }
+  });
+});

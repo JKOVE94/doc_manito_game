@@ -27,6 +27,26 @@ export function normalizeName(name: string): string {
   return name.replace(/\s+/g, "").trim();
 }
 
+const MIN_PARTIAL = 2;
+
+/**
+ * TMI 주인공 이름 → 참가자 이름 연결 (부분 일치 허용).
+ * 1) 정확히 같은 이름 우선
+ * 2) 없으면 한쪽이 다른 쪽에 포함(2글자 이상)되는 참가자가 **딱 1명**일 때만 연결 (예: "김대현" ↔ "대현")
+ * 3) 후보가 없거나 여러 명이면 null (애매하면 연결하지 않음)
+ */
+export function matchSubject(subjectName: string, participantNames: readonly string[]): string | null {
+  const subj = normalizeName(subjectName);
+  if (!subj) return null;
+  const exact = participantNames.find((p) => normalizeName(p) === subj);
+  if (exact) return exact;
+  const partial = participantNames.filter((p) => {
+    const n = normalizeName(p);
+    return (n.length >= MIN_PARTIAL && subj.includes(n)) || (subj.length >= MIN_PARTIAL && n.includes(subj));
+  });
+  return partial.length === 1 ? partial[0] : null;
+}
+
 /**
  * 관리자가 붙여넣은 TMI 텍스트 파싱.
  * - JSON: `[{ name, fact }]`, `[{ name, facts: [] }]`, `{ "이름": ["TMI", ...] }`
@@ -110,16 +130,14 @@ export function buildTmiQuiz(
   usedFactIds: ReadonlySet<string>,
   random: () => number = Math.random,
 ): TmiQuiz | null {
-  const byNorm = new Map(participantNames.map((n) => [normalizeName(n), n]));
-  const taker = normalizeName(takerName);
-  const candidates = facts.filter((f) => {
-    const subj = normalizeName(f.subject_name);
-    return byNorm.has(subj) && subj !== taker && !usedFactIds.has(f.id);
-  });
+  // 각 TMI 의 주인공을 참가자 이름으로 연결 (부분 일치)
+  const resolved = facts
+    .map((f) => ({ f, subject: matchSubject(f.subject_name, participantNames) }))
+    .filter((x): x is { f: (typeof facts)[number]; subject: string } => !!x.subject);
+  const candidates = resolved.filter((x) => x.subject !== takerName && !usedFactIds.has(x.f.id));
   if (candidates.length === 0) return null;
 
-  const fact = candidates[Math.floor(random() * candidates.length)];
-  const subject = byNorm.get(normalizeName(fact.subject_name))!;
+  const { f: fact, subject } = candidates[Math.floor(random() * candidates.length)];
 
   if (fact.quiz && random() < BLANK_QUIZ_RATIO) {
     const options = shuffle([fact.quiz.answer, ...fact.quiz.decoys.slice(0, 3)], random);
@@ -134,8 +152,8 @@ export function buildTmiQuiz(
   }
 
   const others = participantNames.filter((n) => n !== subject);
-  const preferred = shuffle(others.filter((n) => normalizeName(n) !== taker), random);
-  const decoys = [...preferred, ...others.filter((n) => normalizeName(n) === taker)].slice(0, 3);
+  const preferred = shuffle(others.filter((n) => n !== takerName), random);
+  const decoys = [...preferred, ...others.filter((n) => n === takerName)].slice(0, 3);
   if (decoys.length < 1) return null;
   const answerIndex = Math.floor(random() * (decoys.length + 1));
   const options = [...decoys];
