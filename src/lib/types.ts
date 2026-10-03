@@ -79,8 +79,12 @@ export interface MissionView {
 /** 수시 TMI 퀴즈 ("이 TMI 는 누구일까요?") */
 export interface QuizPendingView {
   id: string;
-  question: string; // TMI 문장 그대로 (UI 가 "이 TMI 의 주인공은?" 문구를 붙임)
-  options: string[]; // 참가자 이름 4개
+  /** WHO = "이 TMI 의 주인공은?" (보기=이름) / BLANK = 특정인의 빈칸 퀴즈 (보기=답) */
+  kind: "WHO" | "BLANK";
+  /** BLANK 일 때 주인공 이름 (WHO 는 null) */
+  subject: string | null;
+  question: string; // WHO: TMI 문장 / BLANK: 빈칸 문제 문장
+  options: string[]; // 4개
   expiresAt: string;
 }
 
@@ -337,6 +341,7 @@ export interface AdminState {
   maxHintLevel: number;
   tmi: {
     factCount: number;
+    quizCount: number; // 빈칸 퀴즈가 있는 TMI 수
     /** 이름별 TMI 수. matched=false 면 참가자 이름과 일치하지 않아 퀴즈에 안 나옴 */
     subjects: { name: string; count: number; matched: boolean }[];
   };

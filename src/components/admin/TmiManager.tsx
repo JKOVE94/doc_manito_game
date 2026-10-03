@@ -57,6 +57,25 @@ export function TmiManager({
     }
   };
 
+  const [presetLoading, setPresetLoading] = useState(false);
+  const [confirmingPreset, setConfirmingPreset] = useState(false);
+
+  const handleLoadPreset = async () => {
+    setPresetLoading(true);
+    setSaveError(null);
+    setSaveSuccessMsg(null);
+    try {
+      const res = await api<{ ok: true; factCount: number; quizCount: number }>("/api/admin/tmi", { preset: "notion" });
+      setSaveSuccessMsg(`Notion TMI ${res.factCount}개(빈칸 퀴즈 ${res.quizCount}개)를 불러왔어요.`);
+      setConfirmingPreset(false);
+      await onRefresh();
+    } catch (err) {
+      setSaveError(err instanceof ApiRequestError ? err.message : "불러오기에 실패했습니다.");
+    } finally {
+      setPresetLoading(false);
+    }
+  };
+
   const handleSendQuiz = async () => {
     setSendLoading(true);
     setQuizError(null);
@@ -84,7 +103,7 @@ export function TmiManager({
       <SectionTitle
         right={
           <Badge tone={tmi.factCount > 0 ? "accent" : "neutral"}>
-            총 {tmi.factCount}개 등록
+            총 {tmi.factCount}개 · 빈칸 {tmi.quizCount}개
           </Badge>
         }
       >
@@ -162,6 +181,29 @@ export function TmiManager({
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* 2.5 Notion TMI 프리셋 */}
+      <div className="flex flex-col gap-2 rounded-xl border border-brand/30 bg-brand/5 p-3">
+        <p className="text-sm font-bold text-ink">📥 Notion TMI 불러오기</p>
+        <p className="text-xs leading-relaxed text-ink-soft break-keep">
+          전제니·오아영·이용준·김대현·김윤진·권순웅 6명, TMI 54개 (빈칸 퀴즈 포함, &lsquo;최근·어제·오늘&rsquo; 등 시점 정보 제거본).
+          현재 TMI 는 모두 교체돼요. 참가자 이름이 위 이름과 같아야 퀴즈에 나와요.
+        </p>
+        {confirmingPreset ? (
+          <div className="flex gap-2">
+            <Button type="button" onClick={handleLoadPreset} loading={presetLoading} className="flex-1">
+              교체하고 불러오기
+            </Button>
+            <Button type="button" variant="secondary" onClick={() => setConfirmingPreset(false)} disabled={presetLoading}>
+              취소
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" onClick={() => setConfirmingPreset(true)}>
+            📥 Notion TMI 54개 불러오기
+          </Button>
         )}
       </div>
 

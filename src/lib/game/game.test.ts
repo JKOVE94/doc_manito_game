@@ -207,3 +207,37 @@ describe("personalDeadline (away grace)", () => {
     expect(r.graceMs).toBe(20 * m + buffer);
   });
 });
+
+import notion from "@/data/tmi-notion.json";
+
+describe("Notion TMI preset + blank quizzes", () => {
+  const parsed = parseTmiText(JSON.stringify(notion));
+  const facts = parsed.map((f, i) => ({ id: `f${i}`, subject_name: f.name, fact: f.fact, quiz: f.quiz ?? null }));
+  const people = ["전제니", "오아영", "이용준", "김대현", "김윤진", "권순웅"];
+
+  it("parses all 54 facts with blank quizzes", () => {
+    expect(parsed).toHaveLength(54);
+    expect(parsed.every((f) => f.quiz && f.quiz.decoys.length === 3)).toBe(true);
+    expect(new Set(parsed.map((f) => f.name))).toEqual(new Set(people));
+  });
+
+  it("produces both kinds; blank answer is at answerIndex and never about the taker", () => {
+    const kinds = new Set<string>();
+    for (let s = 1; s <= 200; s++) {
+      let seed = s;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      const q = buildTmiQuiz(facts, "김대현", people, new Set(), rnd)!;
+      kinds.add(q.kind);
+      expect(q.options).toHaveLength(4);
+      expect(new Set(q.options).size).toBe(4);
+      if (q.kind === "BLANK") {
+        expect(q.subject).not.toBe("김대현");
+        const fact = facts.find((f) => f.id === q.factId)!;
+        expect(q.options[q.answerIndex]).toBe(fact.quiz!.answer);
+      } else {
+        expect(q.options[q.answerIndex]).not.toBe("김대현");
+      }
+    }
+    expect(kinds).toEqual(new Set(["WHO", "BLANK"]));
+  });
+});

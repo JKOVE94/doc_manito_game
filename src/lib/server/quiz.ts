@@ -10,6 +10,8 @@ import { listFacts } from "./tmi";
 
 interface QuizRow {
   id: string;
+  kind: "WHO" | "BLANK";
+  subject: string | null;
   participant_id: string;
   fact_id: string | null;
   question: string;
@@ -34,7 +36,7 @@ async function listMyQuizzes(sessionId: string, participantId: string): Promise<
   return must(
     await db()
       .from("tmi_quizzes")
-      .select("id, participant_id, fact_id, question, options, answer_index, expires_at, answered_at, is_correct")
+      .select("id, kind, subject, participant_id, fact_id, question, options, answer_index, expires_at, answered_at, is_correct")
       .eq("session_id", sessionId)
       .eq("participant_id", participantId)
       .order("created_at"),
@@ -79,6 +81,8 @@ export async function ensureQuiz(
           session_id: session.id,
           participant_id: me.id,
           fact_id: quiz.factId,
+          kind: quiz.kind,
+          subject: quiz.subject,
           question: quiz.question,
           options: quiz.options,
           answer_index: quiz.answerIndex,
@@ -95,7 +99,14 @@ export async function ensureQuiz(
   return {
     pending:
       pending && session.status === "ACTIVE"
-        ? { id: pending.id, question: pending.question, options: pending.options, expiresAt: pending.expires_at }
+        ? {
+            id: pending.id,
+            kind: pending.kind,
+            subject: pending.subject,
+            question: pending.question,
+            options: pending.options,
+            expiresAt: pending.expires_at,
+          }
         : null,
     score: answered.filter((r) => r.is_correct).length,
     answered: answered.length,
@@ -107,7 +118,7 @@ export async function answerQuiz(participantId: string, quizId: string, optionIn
   const quiz = must(
     await db()
       .from("tmi_quizzes")
-      .select("id, participant_id, fact_id, question, options, answer_index, expires_at, answered_at, is_correct")
+      .select("id, kind, subject, participant_id, fact_id, question, options, answer_index, expires_at, answered_at, is_correct")
       .eq("id", quizId)
       .eq("participant_id", participantId)
       .maybeSingle<QuizRow>(),

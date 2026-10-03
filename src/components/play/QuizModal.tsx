@@ -90,10 +90,19 @@ export function QuizModal({
 
         {/* Question Area */}
         <div className="mt-4">
-          <p className="text-xs font-semibold text-ink-soft">이 TMI의 주인공은 누구일까요?</p>
-          <h3 className="mt-1 text-base font-bold leading-snug text-ink break-words">
-            &quot;{quiz.question}&quot;
-          </h3>
+          {quiz.kind === "BLANK" ? (
+            <>
+              <p className="text-xs font-semibold text-ink-soft">🧩 {quiz.subject} 님의 TMI 빈칸 퀴즈</p>
+              <h3 className="mt-1 text-base font-bold leading-snug text-ink break-words">{quiz.question}</h3>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-ink-soft">이 TMI의 주인공은 누구일까요?</p>
+              <h3 className="mt-1 text-base font-bold leading-snug text-ink break-words">
+                &quot;{quiz.question}&quot;
+              </h3>
+            </>
+          )}
         </div>
 
         {/* Result Feedback Banner */}

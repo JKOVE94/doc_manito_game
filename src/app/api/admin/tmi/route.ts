@@ -1,8 +1,11 @@
 import { requireAdmin } from "@/lib/server/auth";
 import { handle, readJson, str } from "@/lib/server/http";
-import { replaceFacts } from "@/lib/server/tmi";
+import { NOTION_PRESET_JSON, replaceFacts } from "@/lib/server/tmi";
 
 export const POST = handle(async (req: Request) => {
   await requireAdmin();
-  return replaceFacts(str(await readJson(req), "text", { max: 100_000 }));
+  const body = await readJson(req);
+  // preset: "notion" → 저장소에 포함된 Notion TMI 로 교체
+  if (body.preset === "notion") return replaceFacts(NOTION_PRESET_JSON);
+  return replaceFacts(str(body, "text", { max: 100_000 }));
 });
