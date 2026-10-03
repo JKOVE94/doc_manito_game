@@ -99,7 +99,7 @@ export function BetPanel({ bet, refresh }: BetPanelProps) {
       {/* 2. 시크릿 히틀러 배팅 섹션 */}
       <Card>
         <div className="flex items-center justify-between">
-          <SectionTitle>🎲 시크릿 히틀러 승패 배팅</SectionTitle>
+          <SectionTitle right={<a href="/rules" target="_blank" rel="noopener" className="inline-flex min-h-9 items-center rounded-full bg-surface-2 px-3 text-xs font-semibold text-ink-soft hover:text-ink">📖 룰북</a>}>🎲 시크릿 히틀러 승패 배팅</SectionTitle>
           <div>
             {isOpen && <Badge tone="brand">배팅 진행 중 🟢</Badge>}
             {isLocked && <Badge tone="warn">배팅 마감 🔒</Badge>}

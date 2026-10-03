@@ -71,7 +71,14 @@ export function BetController({ bets, onRefresh }: BetControllerProps) {
 
   return (
     <Card className="flex flex-col gap-4">
-      <SectionTitle right={getStatusBadge(bets.status)}>
+      <SectionTitle
+        right={
+          <div className="flex items-center gap-2">
+            <a href="/rules" target="_blank" rel="noopener" className="inline-flex min-h-9 items-center rounded-full bg-surface-2 px-3 text-xs font-semibold text-ink-soft hover:text-ink">📖 룰북</a>
+            {getStatusBadge(bets.status)}
+          </div>
+        }
+      >
         시크릿 히틀러 배팅 제어
       </SectionTitle>
 
