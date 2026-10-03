@@ -20,6 +20,7 @@ import { TruthLiePanel } from "@/components/play/TruthLiePanel";
 import { BetPanel } from "@/components/play/BetPanel";
 import { GuessCard } from "@/components/play/GuessCard";
 import { EndingView } from "@/components/play/EndingView";
+import { ShuffleReveal } from "@/components/play/ShuffleReveal";
 import { AwayControl } from "@/components/play/AwayControl";
 
 type ActiveTab = "target" | "missions" | "mailbox" | "truthLie" | "bet";
@@ -39,6 +40,7 @@ export default function PlayPage() {
   const [jokerModalOpen, setJokerModalOpen] = useState(false);
   const [dismissedPendingQuiz, setDismissedPendingQuiz] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [revealDone, setRevealDone] = useState<string | null>(null);
   const [showAwayConfirm, setShowAwayConfirm] = useState(false);
 
   // 1. Auth check: 401 -> redirect to login
@@ -106,6 +108,26 @@ export default function PlayPage() {
   if (!data) return null;
 
   const sessionStatus = data.session.status;
+
+  // 셔플 공개 연출: 판(startedAt)마다 사람당 한 번
+  const revealKey = `manito-reveal:${data.me.id}:${data.session.startedAt ?? ""}`;
+  const readSeen = () => {
+    try {
+      return localStorage.getItem(revealKey) === "1";
+    } catch {
+      return false;
+    }
+  };
+  const showReveal =
+    sessionStatus === "ACTIVE" && !!data.target && !!data.session.startedAt && revealDone !== revealKey && !readSeen();
+  const finishReveal = () => {
+    try {
+      localStorage.setItem(revealKey, "1");
+    } catch {
+      // 저장 불가 환경에서는 이번 세션 동안만 닫힘
+    }
+    setRevealDone(revealKey);
+  };
   const statusInfo = STATUS_LABELS[sessionStatus] ?? { label: sessionStatus, tone: "neutral" };
   const isDashboardMode = sessionStatus === "ACTIVE" || sessionStatus === "GUESSING";
 
@@ -123,6 +145,14 @@ export default function PlayPage() {
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
+      {showReveal && data.target && (
+        <ShuffleReveal
+          targetName={data.target.name}
+          targetKeywords={data.target.keywords.map((k) => ({ label: k.label, value: k.value }))}
+          pool={data.roster.filter((n) => n !== data.me.name)}
+          onDone={finishReveal}
+        />
+      )}
       {/* Sticky Mini Timer Banner across all screens when timer is RUNNING or PAUSED */}
       <TimerBanner
         timer={data.truthLie.timer}

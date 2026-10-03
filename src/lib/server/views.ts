@@ -231,7 +231,8 @@ export async function buildParticipantState(participantId: string): Promise<Part
   return {
     serverNow: new Date().toISOString(),
     revision: session.revision,
-    session: { status: session.status, participantCount: participants.length },
+    session: { status: session.status, participantCount: participants.length, startedAt: session.started_at },
+    roster: participants.map((p) => p.name),
     me: {
       id: me.id,
       name: me.name,

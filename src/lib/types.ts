@@ -218,7 +218,11 @@ export interface ParticipantState {
   session: {
     status: SessionStatus;
     participantCount: number;
+    /** 게임 시작 시각 (셔플 공개 연출을 판마다 한 번만 보여주는 키) */
+    startedAt: string | null;
   };
+  /** 참가자 이름 목록 (셔플 연출용, 나 포함) */
+  roster: string[];
   me: {
     id: string;
     name: string;

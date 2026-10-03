@@ -54,3 +54,30 @@ body {
   color: var(--ink);
   font-family: var(--font-sans);
 }
+
+/* ---- 마니또 셔플 공개 연출 ---- */
+@keyframes reveal-pop {
+  0% { transform: scale(0.4); opacity: 0; }
+  60% { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+@keyframes reveal-glow {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--brand) 55%, transparent); }
+  50% { box-shadow: 0 0 0 18px color-mix(in srgb, var(--brand) 0%, transparent); }
+}
+@keyframes confetti-fall {
+  0% { transform: translate3d(0, -12vh, 0) rotate(0deg); opacity: 0; }
+  10% { opacity: 1; }
+  100% { transform: translate3d(var(--dx, 0), 112vh, 0) rotate(var(--rot, 540deg)); opacity: 0.9; }
+}
+@keyframes shuffle-flicker {
+  0%, 100% { filter: blur(0); }
+  50% { filter: blur(1.5px); }
+}
+.reveal-pop { animation: reveal-pop 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.reveal-glow { animation: reveal-glow 1.6s ease-out infinite; }
+.confetti-piece { position: absolute; top: 0; animation: confetti-fall var(--dur, 3.6s) linear var(--delay, 0s) both; }
+.shuffle-flicker { animation: shuffle-flicker 0.18s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .reveal-pop, .reveal-glow, .confetti-piece, .shuffle-flicker { animation: none !important; }
+}
