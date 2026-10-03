@@ -8,12 +8,14 @@ import type { AdminChainRow, SessionStatus } from "@/lib/types";
 interface ChainBoardProps {
   chains: AdminChainRow[];
   sessionStatus: SessionStatus;
+  maxHintLevel: number;
   onRefresh: () => Promise<void>;
 }
 
 export function ChainBoard({
   chains,
   sessionStatus,
+  maxHintLevel,
   onRefresh,
 }: ChainBoardProps) {
   const [showMatching, setShowMatching] = useState(false);
@@ -21,7 +23,7 @@ export function ChainBoard({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleUnlockLevel = async (chainId: string, newLevel: number) => {
-    if (newLevel < 0 || newLevel > 3) return;
+    if (newLevel < 0 || newLevel > maxHintLevel) return;
     setLoadingChainId(chainId);
     setErrorMsg(null);
     try {
@@ -111,8 +113,13 @@ export function ChainBoard({
                     </span>
                   </div>
 
-                  <div className="text-xs text-ink-soft">
-                    승인 미션: <strong className="text-ink">{c.approvedMissions}개</strong>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-ink-soft">
+                    <span>
+                      giver 미션 승인: <strong className="text-ink">{c.approvedMissions}개</strong>
+                    </span>
+                    <span>
+                      받는 사람 포인트: <strong className="text-accent">{c.receiverPoints}점</strong>
+                    </span>
                   </div>
                 </div>
 
@@ -120,7 +127,7 @@ export function ChainBoard({
                 <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
                   {/* Unlock level */}
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-ink-soft">키워드 해금:</span>
+                    <span className="font-semibold text-ink-soft">받는 사람의 힌트 단계:</span>
                     <div className="flex items-center gap-1">
                       <Button
                         type="button"
@@ -131,13 +138,13 @@ export function ChainBoard({
                       >
                         −
                       </Button>
-                      <Badge tone={c.unlockedLevel === 3 ? "accent" : "brand"}>
-                        Level {c.unlockedLevel} / 3
+                      <Badge tone={c.unlockedLevel === maxHintLevel ? "accent" : "brand"}>
+                        Level {c.unlockedLevel} / {maxHintLevel}
                       </Badge>
                       <Button
                         type="button"
                         variant="secondary"
-                        disabled={c.unlockedLevel >= 3 || isLoading}
+                        disabled={c.unlockedLevel >= maxHintLevel || isLoading}
                         onClick={() => handleUnlockLevel(c.id, c.unlockedLevel + 1)}
                         className="min-h-7 w-7 p-0 text-xs font-bold"
                       >

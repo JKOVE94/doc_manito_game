@@ -109,7 +109,7 @@ export function JokerModal({
               <p className="font-semibold text-warn">⚠️ 주의사항 (1회용)</p>
               <ul className="mt-1.5 list-inside list-disc space-y-1 text-ink-soft">
                 <li>조커 찬스는 이번 게임 중 <strong className="text-ink">단 1회</strong>만 사용 가능합니다.</li>
-                <li>타깃의 잠긴 키워드 중 하나에 대한 4지선다 퀴즈가 출제됩니다.</li>
+                <li>비밀 마니또의 잠긴 키워드 중 하나에 대한 4지선다 퀴즈가 출제됩니다.</li>
                 <li>정답을 맞히면 키워드의 <strong className="text-ink">초성 또는 힌트</strong>가 즉시 해금됩니다!</li>
                 <li>틀릴 경우 추가 기회 없이 기회가 소진됩니다.</li>
               </ul>
@@ -152,7 +152,7 @@ export function JokerModal({
                 {quiz.question}
               </h3>
               <p className="mt-1 text-xs text-ink-soft">
-                타깃의 진짜 키워드라고 생각되는 보기를 골라주세요!
+                비밀 마니또의 진짜 키워드라고 생각되는 보기를 골라주세요!
               </p>
             </div>
 
@@ -220,7 +220,7 @@ export function JokerModal({
                     정답입니다! 👏
                   </h3>
                   <p className="mt-1 text-xs text-ink-soft">
-                    조커 찬스로 타깃의 키워드 힌트를 획득했습니다!
+                    조커 찬스로 비밀 마니또의 키워드 힌트를 획득했습니다!
                   </p>
                 </div>
 

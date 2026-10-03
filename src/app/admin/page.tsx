@@ -11,10 +11,12 @@ import { SessionControl } from "@/components/admin/SessionControl";
 import { ParticipantTable } from "@/components/admin/ParticipantTable";
 import { TruthLieController } from "@/components/admin/TruthLieController";
 import { MissionManager } from "@/components/admin/MissionManager";
+import { TmiManager } from "@/components/admin/TmiManager";
 import { SubmissionReview } from "@/components/admin/SubmissionReview";
 import { ChainBoard } from "@/components/admin/ChainBoard";
 import { BetController } from "@/components/admin/BetController";
 import { DangerZone } from "@/components/admin/DangerZone";
+import { TestTools } from "@/components/admin/TestTools";
 
 export default function AdminPage() {
   const { data, error, refresh, clockOffsetMs } = useLiveState<AdminState>(
@@ -230,6 +232,7 @@ export default function AdminPage() {
           <SessionControl
             session={data.session}
             participantsCount={data.participants.length}
+            botCount={data.botCount}
             onRefresh={refresh}
           />
 
@@ -254,24 +257,43 @@ export default function AdminPage() {
             onRefresh={refresh}
           />
 
-          {/* 5. SubmissionReview */}
+          {/* 5. TmiManager (신규, MissionManager 다음) */}
+          <TmiManager
+            tmi={data.tmi}
+            quiz={data.quiz}
+            sessionStatus={data.session.status}
+            onRefresh={refresh}
+          />
+
+          {/* 6. SubmissionReview */}
           <SubmissionReview
             submissions={data.submissions}
             onRefresh={refresh}
           />
 
-          {/* 6. ChainBoard (ACTIVE 이후) */}
+          {/* 7. ChainBoard (ACTIVE 이후) */}
           <ChainBoard
             chains={data.chains}
             sessionStatus={data.session.status}
+            maxHintLevel={data.maxHintLevel}
             onRefresh={refresh}
           />
 
-          {/* 7. BetController */}
+          {/* 8. BetController */}
           <BetController
             bets={data.bets}
             onRefresh={refresh}
           />
+
+          {/* TestTools */}
+          <div className="lg:col-span-2">
+            <TestTools
+              session={data.session}
+              participants={data.participants}
+              botCount={data.botCount}
+              onRefresh={refresh}
+            />
+          </div>
 
           {/* 8. DangerZone */}
           <div className="lg:col-span-2">

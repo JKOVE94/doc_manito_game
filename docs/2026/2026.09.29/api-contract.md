@@ -37,9 +37,35 @@
 | POST | `/api/admin/mission/close` | `{ slot }` | `{ ok }` (즉시 마감) |
 | POST | `/api/admin/submission/review` | `{ submissionId, decision: 'APPROVED'\|'REJECTED'\|'PENDING' }` | `{ ok }` → 해금 레벨 자동 재계산 |
 | POST | `/api/admin/chain/unlock` | `{ chainId, level: 0..3 }` | `{ ok }` 수동 보정 |
+| POST | `/api/admin/test/bots` | `{ action: 'add', count: 1..10 }` \| `{ action: 'remove' }` | `{ ok }` 🧪 봇 추가/전체 삭제 (READY 에서만) |
+| POST | `/api/admin/test/act` | – | `BotActResult` 🧪 봇 전원이 현재 단계 행동 (활성 미션 제출, 배팅 OPEN 이면 배팅, GUESSING 이면 추리) |
+| POST | `/api/admin/test/impersonate` | `{ participantId }` | `{ ok }` 🧪 **봇만** 가능. 참가자 쿠키를 봇으로 설정 → 클라이언트가 `/play` 로 이동 |
 | POST | `/api/admin/bet` | `{ action: 'open'\|'lock' }` \| `{ action: 'result', winningFaction }` | `{ ok }` |
 
 ## 실시간
 `useLiveState<ParticipantState>("/api/me/state")` / `useLiveState<AdminState>("/api/admin/state")`
 → `{ data, error, refresh, clockOffsetMs }`. 액션 후엔 `await refresh()` 호출.
 타이머 표시: `remainingSeconds(timer, clockOffsetMs)` 를 250ms 간격으로 재계산.
+
+
+---
+
+## v2 변경 (2026-10-03) — 두 관계 구조
+
+- **target** = 내가 섬기는 사람 (**이름 공개**, 키워드 3개 공개). 미션은 이 사람을 섬기는 내용.
+- **manito** = 나를 섬기는 비밀 마니또 (**정체 비공개**). 최종 추리 대상.
+- 힌트 포인트 = 내 승인 미션 수 + 내 퀴즈 정답 수 (+관리자 보정) → 포인트가 `HINT_THRESHOLDS`(config) 에 도달할 때마다 manito 힌트 1단계 해금
+  (1~3: manito 키워드 3개, 4: 이름 글자 수, 5: 이름 초성)
+- 조커 찬스 = manito 의 잠긴 키워드 대상
+
+| Method | Path | Body | Response | 비고 |
+|---|---|---|---|---|
+| POST | `/api/me/mission/upload-url` | `{ contentType }` | `{ bucket, path, token }` | 클라이언트는 `uploadMissionPhoto(file)` (`src/lib/client/upload.ts`) 만 쓰면 됨 |
+| POST | `/api/me/mission` | `{ slot, note?, photoPath? }` | `{ ok }` | 메모 또는 사진 중 하나 이상 필수 |
+| POST | `/api/me/quiz/answer` | `{ quizId, optionIndex: 0..3 }` | `QuizAnswerResult` | 수시 TMI 퀴즈. 퀴즈는 서버가 랜덤 시점에 자동 생성 → `state.quiz.pending` 으로 내려옴. 만료 시 자동 오답 처리 |
+| POST | `/api/me/mail/send` | `{ to: 'TARGET'\|'MANITO', question }` (2~200자) | `{ ok }` | 방향별 3개 제한 |
+| POST | `/api/me/mail/answer` | `{ mailId, answer }` (1~300자) | `{ ok }` | 내게 온 질문에 답장 (1회, 수정 불가) |
+| POST | `/api/me/ask` | `{ question, about: 'TARGET'\|'MANITO' }` | `AskResult` | AI 스무고개. 두 대상이 질문 횟수 공유 |
+| POST | `/api/me/guess` | `{ participantId }` | `{ ok }` | **나를 섬긴 비밀 마니또** 지목 |
+| POST | `/api/admin/tmi` | `{ text }` | `{ ok, factCount }` | TMI 전체 교체. 형식: JSON `[{name, fact}]` 또는 줄마다 `이름: TMI` (`이름 \| TMI`, 탭 구분도 가능) |
+| POST | `/api/admin/quiz` | `{ action: 'send-now' }` | `{ ok }` | 전원에게 즉시 퀴즈 발송 (대기 중 퀴즈 없는 사람) |

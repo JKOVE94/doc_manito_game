@@ -1,5 +1,5 @@
 import "server-only";
-import { DEFAULT_MISSIONS, MISSION_SLOT_COUNT, UNLOCK_THRESHOLDS } from "@/lib/config";
+import { DEFAULT_MISSIONS, MAX_HINT_LEVEL, MISSION_SLOT_COUNT, UNLOCK_THRESHOLDS } from "@/lib/config";
 import type { BetStatus, Faction, Prediction, SessionStatus, SubmissionStatus, TimerStatus, TimerView } from "@/lib/types";
 import { db, must, mustOne } from "./supabase";
 
@@ -25,7 +25,9 @@ export interface ParticipantRow {
   name: string;
   pin_hash: string;
   alias: string | null;
+  is_bot: boolean;
   failed_pin_attempts: number;
+  next_quiz_at: string | null;
   locked_until: string | null;
   created_at: string;
 }
@@ -76,6 +78,7 @@ export interface SubmissionRow {
   participant_id: string;
   note: string;
   status: SubmissionStatus;
+  photo_path: string | null;
   created_at: string;
 }
 
@@ -216,7 +219,7 @@ export async function listSubmissions(missionIds: string[]): Promise<SubmissionR
   return must(
     await db()
       .from("mission_submissions")
-      .select("id, mission_id, participant_id, note, status, created_at")
+      .select("id, mission_id, participant_id, note, status, photo_path, created_at")
       .in("mission_id", missionIds)
       .order("created_at", { ascending: false }),
     "list submissions",
@@ -238,21 +241,33 @@ export async function listBets(sessionId: string): Promise<BetRow[]> {
 }
 
 // ---------------------------------------------------------------- 규칙
-export function thresholdLevel(approvedCount: number): number {
-  return UNLOCK_THRESHOLDS.filter((t) => approvedCount >= t).length;
+export function thresholdLevel(points: number): number {
+  return UNLOCK_THRESHOLDS.filter((t) => points >= t).length;
 }
 
 export function clampLevel(level: number): number {
-  return Math.min(3, Math.max(0, level));
+  return Math.min(MAX_HINT_LEVEL, Math.max(0, level));
 }
 
 export function nextUnlockAt(level: number): number | null {
-  return level >= 3 ? null : (UNLOCK_THRESHOLDS[level] ?? null);
+  return level >= MAX_HINT_LEVEL ? null : (UNLOCK_THRESHOLDS[level] ?? null);
 }
 
 export function betCorrect(bet: BetRow | undefined, winning: Faction | null): boolean | null {
   if (!bet || !winning) return null;
   return (bet.faction === winning) === (bet.prediction === "WIN");
+}
+
+export async function getChainByReceiver(sessionId: string, receiverId: string): Promise<ChainRow | null> {
+  return must(
+    await db()
+      .from("manito_chains")
+      .select("*")
+      .eq("session_id", sessionId)
+      .eq("receiver_id", receiverId)
+      .maybeSingle<ChainRow>(),
+    "load chain by receiver",
+  );
 }
 
 export async function countApproved(sessionId: string, participantId: string): Promise<number> {
@@ -270,11 +285,35 @@ export async function countApproved(sessionId: string, participantId: string): P
   return count ?? 0;
 }
 
-/** 승인 미션 수 재계산 → 해금 레벨 동기화 (unlock_bonus 반영) */
-export async function recomputeUnlock(sessionId: string, giverId: string): Promise<void> {
-  const chain = await getChainByGiver(sessionId, giverId);
+export async function countQuizCorrect(sessionId: string, participantId: string): Promise<number> {
+  const { count, error } = await db()
+    .from("tmi_quizzes")
+    .select("id", { count: "exact", head: true })
+    .eq("session_id", sessionId)
+    .eq("participant_id", participantId)
+    .eq("is_correct", true);
+  if (error) throw new Error(`[db] count quiz: ${error.message}`);
+  return count ?? 0;
+}
+
+/** 힌트 포인트 = 내 승인 미션 수 + 내 퀴즈 정답 수 */
+export async function hintPoints(sessionId: string, participantId: string) {
+  const [missions, quizzes] = await Promise.all([
+    countApproved(sessionId, participantId),
+    countQuizCorrect(sessionId, participantId),
+  ]);
+  return { missions, quizzes, total: missions + quizzes };
+}
+
+/**
+ * 참가자 P 의 포인트 재계산 → P 가 "자신의 비밀 마니또"에 대해 해금한 단계 동기화.
+ * 대상 행은 giver→P (receiver = P) 체인. unlock_bonus(관리자 보정) 반영.
+ */
+export async function recomputeUnlock(sessionId: string, participantId: string): Promise<void> {
+  const chain = await getChainByReceiver(sessionId, participantId);
   if (!chain) return;
-  const level = clampLevel(thresholdLevel(await countApproved(sessionId, giverId)) + chain.unlock_bonus);
+  const { total } = await hintPoints(sessionId, participantId);
+  const level = clampLevel(thresholdLevel(total) + chain.unlock_bonus);
   if (level !== chain.unlocked_level) {
     must(await db().from("manito_chains").update({ unlocked_level: level }).eq("id", chain.id), "update level");
   }

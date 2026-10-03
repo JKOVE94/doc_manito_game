@@ -122,7 +122,7 @@ export function EndingView({ ending, myId }: EndingViewProps) {
       <Card>
         <SectionTitle>📊 전체 마니또 매칭 & 결과 표</SectionTitle>
         <p className="mb-3 text-xs text-ink-soft">
-          각 참가자가 섬긴 대상(익명 닉네임과 실명), 승인된 미션 수, 그리고 최종 추리 결과입니다.
+          각 참가자가 섬긴 대상, 승인된 미션 수, 그리고 최종 추리 결과입니다.
         </p>
 
         {/* Scrollable table container */}
@@ -131,7 +131,7 @@ export function EndingView({ ending, myId }: EndingViewProps) {
             <thead className="border-b border-line bg-surface-2 font-semibold text-ink-soft">
               <tr>
                 <th className="px-3 py-2.5">섬긴 사람</th>
-                <th className="px-3 py-2.5">타깃 (닉네임 / 실명)</th>
+                <th className="px-3 py-2.5">타깃</th>
                 <th className="px-2 py-2.5 text-center">승인 미션</th>
                 <th className="px-3 py-2.5 text-center">추리 결과</th>
               </tr>
@@ -161,14 +161,9 @@ export function EndingView({ ending, myId }: EndingViewProps) {
                     </td>
 
                     <td className="px-3 py-3">
-                      <div className="flex flex-col">
-                        <span className="font-bold text-ink">
-                          {link.receiverAlias}
-                        </span>
-                        <span className="text-[11px] text-ink-soft">
-                          ({link.receiver.name})
-                        </span>
-                      </div>
+                      <span className="font-bold text-ink">
+                        {link.receiver.name}
+                      </span>
                     </td>
 
                     <td className="whitespace-nowrap px-2 py-3 text-center">

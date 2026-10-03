@@ -9,6 +9,7 @@ import {
   bump,
   type ChainRow,
   getChainByGiver,
+  getChainByReceiver,
   getSession,
   type HintQuiz,
   isMissionActive,
@@ -18,6 +19,7 @@ import {
   type ParticipantRow,
   type SessionRow,
 } from "./repo";
+import { photoPrefix } from "./storage";
 import { db, must } from "./supabase";
 
 const MAX_PIN_ATTEMPTS = 5;
@@ -38,6 +40,15 @@ async function loadMe(participantId: string): Promise<{ session: SessionRow; me:
   return { session, me };
 }
 
+/** 나를 섬기는 비밀 마니또 체인 (giver→나). 힌트·조커·최종 추리 상태가 여기 저장됨 */
+async function requireManitoChain(session: SessionRow, me: ParticipantRow): Promise<ChainRow> {
+  if (session.status === "READY") throw conflict("아직 게임이 시작되지 않았어요.");
+  const chain = await getChainByReceiver(session.id, me.id);
+  if (!chain) throw conflict("이번 게임의 매칭에 포함되어 있지 않아요. 호스트에게 문의하세요.");
+  return chain;
+}
+
+/** 내가 섬기는 사람 체인 (나→target) */
 async function requireChain(session: SessionRow, me: ParticipantRow): Promise<ChainRow> {
   if (session.status === "READY") throw conflict("아직 게임이 시작되지 않았어요.");
   const chain = await getChainByGiver(session.id, me.id);
@@ -132,12 +143,19 @@ export async function setLieTurn(participantId: string, lieTurn: number): Promis
 }
 
 // ---------------------------------------------------------------- 미션
-export async function submitMission(participantId: string, slot: number, note: string): Promise<void> {
+export async function submitMission(
+  participantId: string,
+  slot: number,
+  note: string,
+  photoPath: string | null,
+): Promise<void> {
   const { session, me } = await loadMe(participantId);
   await requireChain(session, me);
   if (session.status !== "ACTIVE") throw conflict("지금은 미션을 제출할 수 없어요.");
   const mission = (await listMissions(session.id)).find((m) => m.hour_slot === slot);
   if (!mission || !isMissionActive(mission)) throw conflict("진행 중인 미션이 아니에요.");
+  if (!note && !photoPath) throw badRequest("인증 사진이나 메모 중 하나는 꼭 남겨 주세요.");
+  if (photoPath && !photoPath.startsWith(photoPrefix(session.id, me.id))) throw badRequest("사진 경로가 올바르지 않아요.");
 
   const prev = must(
     await db()
@@ -155,6 +173,7 @@ export async function submitMission(participantId: string, slot: number, note: s
         mission_id: mission.id,
         participant_id: me.id,
         note,
+        photo_path: photoPath,
         status: "PENDING",
         created_at: new Date().toISOString(),
         reviewed_at: null,
@@ -169,7 +188,7 @@ export async function submitMission(participantId: string, slot: number, note: s
 // ---------------------------------------------------------------- 조커 찬스
 export async function jokerStart(participantId: string): Promise<JokerQuizView> {
   const { session, me } = await loadMe(participantId);
-  const chain = await requireChain(session, me);
+  const chain = await requireManitoChain(session, me);
   if (chain.hint_used) {
     if (chain.hint_quiz && chain.hint_solved === null) {
       return { question: chain.hint_quiz.question, options: chain.hint_quiz.options };
@@ -179,20 +198,19 @@ export async function jokerStart(participantId: string): Promise<JokerQuizView> 
 
   const participants = await listParticipants(session.id);
   const keywords = await listKeywords(participants.map((p) => p.id));
-  const targetKeywords = keywords.filter((k) => k.participant_id === chain.receiver_id);
-  const locked = targetKeywords.filter((k) => k.slot_index > chain.unlocked_level);
+  const manitoKeywords = keywords.filter((k) => k.participant_id === chain.giver_id);
+  const locked = manitoKeywords.filter((k) => k.slot_index > chain.unlocked_level);
   if (locked.length === 0) throw conflict("힌트를 받을 수 있는 잠긴 키워드가 없어요.");
 
   const pick = locked[Math.floor(Math.random() * locked.length)];
-  const sameSlot = keywords.filter((k) => k.participant_id !== chain.receiver_id && k.slot_index === pick.slot_index);
-  const others = keywords.filter((k) => k.participant_id !== chain.receiver_id && k.slot_index !== pick.slot_index);
+  const sameSlot = keywords.filter((k) => k.participant_id !== chain.giver_id && k.slot_index === pick.slot_index);
+  const others = keywords.filter((k) => k.participant_id !== chain.giver_id && k.slot_index !== pick.slot_index);
   // 같은 카테고리 오답을 우선 사용, 부족하면 다른 카테고리 → 기본 오답 순
   const pool = [...shuffled(sameSlot), ...shuffled(others)].map((k) => k.keyword_value);
   const { options, answerIndex } = buildQuizOptions(pick.keyword_value, pool.slice(0, Math.max(3, sameSlot.length)));
 
-  const alias = participants.find((p) => p.id === chain.receiver_id)?.alias ?? "타깃";
   const label = KEYWORD_SLOTS.find((s) => s.slot === pick.slot_index)?.label ?? "키워드";
-  const quiz: HintQuiz = { question: `'${alias}'님의 「${label}」 키워드는 무엇일까요?`, options, answerIndex };
+  const quiz: HintQuiz = { question: `🎭 비밀 마니또의 「${label}」 키워드는 무엇일까요?`, options, answerIndex };
 
   const claimed = must(
     await db()
@@ -223,7 +241,7 @@ export async function jokerAnswer(
   optionIndex: number,
 ): Promise<{ correct: boolean; hint: string | null }> {
   const { session, me } = await loadMe(participantId);
-  const chain = await requireChain(session, me);
+  const chain = await requireManitoChain(session, me);
   if (!chain.hint_used || !chain.hint_quiz) throw conflict("먼저 조커 찬스를 사용해 주세요.");
   if (chain.hint_solved !== null) throw conflict("이미 답을 제출했어요.");
 
@@ -265,7 +283,7 @@ export async function placeBet(participantId: string, faction: Faction, predicti
 
 export async function makeGuess(participantId: string, guessId: string): Promise<void> {
   const { session, me } = await loadMe(participantId);
-  const chain = await requireChain(session, me);
+  const chain = await requireManitoChain(session, me);
   if (session.status !== "GUESSING") throw conflict("지금은 최종 추리 시간이 아니에요.");
   if (guessId === me.id) throw badRequest("자기 자신은 고를 수 없어요.");
   const exists = (await listParticipants(session.id)).some((p) => p.id === guessId);
@@ -273,7 +291,7 @@ export async function makeGuess(participantId: string, guessId: string): Promise
   must(
     await db()
       .from("manito_chains")
-      .update({ final_guess_id: guessId, is_guess_correct: guessId === chain.receiver_id })
+      .update({ final_guess_id: guessId, is_guess_correct: guessId === chain.giver_id })
       .eq("id", chain.id),
     "save guess",
   );

@@ -13,12 +13,14 @@ interface SessionControlProps {
     canStart: boolean;
   };
   participantsCount: number;
+  botCount?: number;
   onRefresh: () => Promise<void>;
 }
 
 export function SessionControl({
   session,
   participantsCount,
+  botCount = 0,
   onRefresh,
 }: SessionControlProps) {
   const [loading, setLoading] = useState(false);
@@ -81,6 +83,12 @@ export function SessionControl({
 
   return (
     <Card className="flex flex-col gap-4">
+      {botCount > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-warn/30 bg-warn/10 p-3 text-xs sm:text-sm font-semibold text-warn">
+          <span>🧪 테스트 모드: 봇 {botCount}명 포함 — 실제 파티 전 RESET 하세요</span>
+        </div>
+      )}
+
       <SectionTitle right={getStatusBadge(session.status)}>
         세션 진행 제어
       </SectionTitle>

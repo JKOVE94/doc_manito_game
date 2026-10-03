@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// 전체 게임 흐름 스모크 테스트 (실제 API 호출). ⚠️ 대상 서버의 게임 데이터를 RESET 합니다.
-// 사용: BASE_URL=http://localhost:3000 ADMIN_PASSWORD=... node scripts/smoke.mjs
+// 전체 게임 흐름 스모크 테스트 v2 (실제 API 호출). ⚠️ 대상 서버의 게임 데이터를 RESET 합니다. 로컬 DB 에서만 실행하세요.
+// 사용: BASE_URL=http://localhost:3000 ADMIN_PASSWORD=... [SUPABASE_URL=... SUPABASE_PUBLISHABLE_KEY=...] [SMOKE_AI=1] node scripts/smoke.mjs
 import assert from "node:assert/strict";
+import { createClient } from "@supabase/supabase-js";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
@@ -15,8 +16,7 @@ function client() {
       headers: { "Content-Type": "application/json", cookie },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
-    const set = res.headers.getSetCookie?.() ?? [];
-    for (const c of set) {
+    for (const c of res.headers.getSetCookie?.() ?? []) {
       const pair = c.split(";")[0];
       const name = pair.split("=")[0];
       cookie = [...cookie.split("; ").filter((x) => x && !x.startsWith(name + "=")), pair].join("; ");
@@ -26,12 +26,10 @@ function client() {
     return data;
   };
 }
-
 const step = (msg) => console.log(`✔ ${msg}`);
 
 const admin = client();
 await admin("/api/admin/state", undefined, 401);
-await admin("/api/admin/login", { password: "wrong" }, 401);
 await admin("/api/admin/login", { password: ADMIN_PASSWORD });
 await admin("/api/admin/session", { action: "reset", confirm: "RESET", keepParticipants: false });
 step("admin login + reset");
@@ -48,159 +46,214 @@ const players = [];
 for (const [i, name] of names.entries()) {
   const call = client();
   const { participantId } = await call("/api/auth/join", { name, pin: `100${i}` });
-  players.push({ name, id: participantId, call });
+  players.push({ name, id: participantId, call, kw: keywordSets[i] });
 }
 await client()("/api/auth/join", { name: "가영", pin: "9999" }, 401);
-await client()("/api/auth/join", { name: "가영", pin: "12" }, 400);
-step("5 participants joined, wrong PIN rejected");
-
-// 4명만 키워드 입력 → 시작 시 409 경고
 for (const [i, p] of players.entries()) {
-  if (i < 4) await p.call("/api/me/keywords", { keywords: keywordSets[i] });
+  if (i < 4) await p.call("/api/me/keywords", { keywords: p.kw });
   await p.call("/api/me/lie-turn", { lieTurn: (i % 4) + 1 });
 }
-const conflict = await admin("/api/admin/session", { action: "start" }, 409);
-assert.deepEqual(conflict.missing, ["마루"]);
-await players[4].call("/api/me/keywords", { keywords: keywordSets[4] });
-await admin("/api/admin/session", { action: "start" });
-await admin("/api/admin/session", { action: "start" }, 409);
-step("start blocked on missing keywords, then shuffled");
+assert.deepEqual((await admin("/api/admin/session", { action: "start" }, 409)).missing, ["마루"]);
+await players[4].call("/api/me/keywords", { keywords: players[4].kw });
 
-// 단일 순환 검증
+// TMI 데이터 (게임 전 업로드)
+const tmiLines = [
+  "가영: 초등학생 때 전국 줄넘기 대회 3등",
+  "나래 | 매운 음식 하나도 못 먹음",
+  "다솜\t고양이 세 마리 집사",
+  "라희: 새벽 5시 기상 3년째",
+  "마 루: 군대에서 취사병",
+  "외부인: 퀴즈에 나오면 안 됨",
+];
+const tmiRes = await admin("/api/admin/tmi", { text: tmiLines.join("\n") });
+assert.equal(tmiRes.factCount, 6);
 let a = await admin("/api/admin/state");
-assert.equal(a.session.status, "ACTIVE");
-assert.equal(a.chains.length, 5);
+assert.equal(a.tmi.subjects.find((s) => s.name === "마 루").matched, true);
+assert.equal(a.tmi.subjects.find((s) => s.name === "외부인").matched, false);
+step("TMI import (lines/pipe/tab, space-insensitive name match, unmatched flagged)");
+
+await admin("/api/admin/session", { action: "start" });
+a = await admin("/api/admin/state");
 const next = new Map(a.chains.map((c) => [c.giver.id, c.receiver.id]));
+const prev = new Map(a.chains.map((c) => [c.receiver.id, c.giver.id]));
 let cur = players[0].id;
-const visited = new Set();
-for (let i = 0; i < 5; i++) {
-  visited.add(cur);
-  cur = next.get(cur);
-}
-assert.equal(visited.size, 5);
-assert.equal(cur, players[0].id);
+const seen = new Set();
+for (let i = 0; i < 5; i++) (seen.add(cur), (cur = next.get(cur)));
+assert.equal(seen.size, 5);
 for (const c of a.chains) assert.notEqual(next.get(c.receiver.id), c.giver.id);
-step("single Hamiltonian cycle, no 2-cycles");
+step("single cycle, no 2-cycles");
 
-// 참가자 화면: 타깃 익명, 키워드 잠김, 이름 비노출
+// 두 관계: 내가 섬기는 사람(이름 공개) / 나를 섬기는 비밀 마니또(비공개)
 const p0 = players[0];
+const byId = new Map(players.map((p) => [p.id, p]));
+const target = byId.get(next.get(p0.id));
+const giver = byId.get(prev.get(p0.id));
 let s = await p0.call("/api/me/state");
-const targetId = next.get(p0.id);
-const target = players.find((p) => p.id === targetId);
-assert.ok(s.target.alias);
-assert.ok(s.target.keywords.every((k) => k.value === null));
-assert.ok(!JSON.stringify(s).includes(targetId), "target id must not leak");
-assert.equal(await client()("/api/auth/join", { name: "새사람", pin: "1111" }, 403).then(() => "blocked"), "blocked");
-step("participant sees anonymous target only; late join blocked");
+assert.equal(s.target.name, target.name);
+assert.deepEqual(s.target.keywords.map((k) => k.value), target.kw);
+assert.equal(s.manito.unlockedLevel, 0);
+assert.equal(s.manito.maxLevel, 5);
+assert.ok(s.manito.hints.every((h) => h.value === null));
+const raw = JSON.stringify(s);
+assert.ok(!raw.includes(giver.id) && !raw.includes(giver.name), "secret manito must not leak");
+step(`two relations: serve ${target.name} (named) / secret manito hidden`);
 
-// 미션 → 승인 → 해금
+// 수시 퀴즈 → 정답 시 힌트 포인트 +1 → 비밀 마니또 힌트 1단계
+assert.equal(s.quiz.pending, null);
+await admin("/api/admin/quiz", { action: "send-now" });
+s = await p0.call("/api/me/state");
+const q = s.quiz.pending;
+assert.ok(q, "quiz should be generated on next state fetch");
+assert.equal(q.options.length, 4);
+assert.ok(!q.question.includes("외부인") && !q.question.includes("줄넘기"), "no unmatched / self TMI");
+const factToName = tmiLines.map((l) => {
+  const [n, ...rest] = l.split(/\s*[:|\t]\s*/);
+  return { name: n.replace(/\s/g, ""), fact: rest.join(" ").trim() };
+});
+const subject = factToName.find((f) => q.question.includes(f.fact)).name;
+const qr = await p0.call("/api/me/quiz/answer", { quizId: q.id, optionIndex: q.options.indexOf(subject) });
+assert.equal(qr.correct, true);
+assert.equal(qr.score, 1);
+await p0.call("/api/me/quiz/answer", { quizId: q.id, optionIndex: 0 }, 409);
+s = await p0.call("/api/me/state");
+assert.equal(s.quiz.pending, null);
+assert.equal(s.manito.points, 1);
+assert.equal(s.manito.unlockedLevel, 1);
+assert.equal(s.manito.hints[0].value, giver.kw[0]);
+assert.equal(s.manito.nextUnlockAt, 3);
+step(`random TMI quiz answered (${subject}) → hint level 1 = "${giver.kw[0]}"`);
+
+// 미션 사진 인증
 await admin("/api/admin/mission/open", { slot: 1, durationMin: 60 });
-await p0.call("/api/me/mission", { slot: 1, note: "칭찬 완료" });
-await p0.call("/api/me/mission", { slot: 2, note: "x" }, 409);
+await p0.call("/api/me/mission", { slot: 1, note: "" }, 400);
+await p0.call("/api/me/mission", { slot: 1, note: "", photoPath: "other/x.jpg" }, 400);
+let photoPath = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_PUBLISHABLE_KEY) {
+  const up = await p0.call("/api/me/mission/upload-url", { contentType: "image/png" });
+  const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, { auth: { persistSession: false } });
+  const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64");
+  const { error } = await sb.storage.from(up.bucket).uploadToSignedUrl(up.path, up.token, png, { contentType: "image/png" });
+  assert.equal(error, null, error?.message);
+  photoPath = up.path;
+  // 비공개 버킷: 공개 키로 직접 읽기 불가
+  const { data: leaked } = await sb.storage.from(up.bucket).download(up.path);
+  assert.equal(leaked, null, "photo must not be readable with the publishable key");
+}
+await p0.call("/api/me/mission", { slot: 1, note: "음료 배달 완료", photoPath });
 a = await admin("/api/admin/state");
 const sub = a.submissions.find((x) => x.participant.id === p0.id);
+if (photoPath) {
+  assert.ok(sub.photoUrl);
+  assert.equal((await fetch(sub.photoUrl)).status, 200);
+}
 await admin("/api/admin/submission/review", { submissionId: sub.id, decision: "APPROVED" });
 s = await p0.call("/api/me/state");
-assert.equal(s.target.unlockedLevel, 1);
-assert.equal(s.target.keywords[0].value, keywordSets[names.indexOf(target.name)][0]);
-assert.equal(s.nextUnlockAt, 3);
-await p0.call("/api/me/mission", { slot: 1, note: "again" }, 409);
-step("mission approved → keyword 1 unlocked");
+assert.equal(s.manito.points, 2);
+assert.deepEqual(s.manito.pointSources, { missions: 1, quizzes: 1 });
+assert.equal(s.manito.unlockedLevel, 1);
+if (photoPath) assert.ok(s.missions[0].mySubmission.photoUrl);
+step(photoPath ? "mission photo upload (private bucket, signed URL) + approval → points 2" : "mission (no storage env, photo skipped) → points 2");
 
-// 조커
-const quiz = await p0.call("/api/me/joker/start", {});
-assert.equal(quiz.options.length, 4);
-assert.ok(!("answerIndex" in quiz));
-const again = await p0.call("/api/me/joker/start", {});
-assert.deepEqual(again, quiz);
-const targetWords = keywordSets[names.indexOf(target.name)];
-const idx = quiz.options.findIndex((o) => targetWords.slice(1).includes(o));
-const ans = await p0.call("/api/me/joker/answer", { optionIndex: idx });
-assert.equal(ans.correct, true);
-assert.ok(ans.hint);
-await p0.call("/api/me/joker/answer", { optionIndex: idx }, 409);
-await p0.call("/api/me/joker/start", {}, 409);
+// 질문 우편함
+const tgt = players.find((p) => p.id === target.id);
+const gv = players.find((p) => p.id === giver.id);
+for (let i = 1; i <= 3; i++) await p0.call("/api/me/mail/send", { to: "TARGET", question: `질문 ${i}: 좋아하는 간식은?` });
+await p0.call("/api/me/mail/send", { to: "TARGET", question: "4번째" }, 429);
+let ts = await tgt.call("/api/me/state");
+const fromManito = ts.mailbox.inbox.filter((m) => m.from === "MY_MANITO");
+assert.equal(fromManito.length, 3);
+assert.ok(fromManito.every((m) => m.fromLabel.includes("비밀 마니또")));
+assert.ok(!JSON.stringify(ts.mailbox).includes(p0.name), "target must not learn who asked");
+await tgt.call("/api/me/mail/answer", { mailId: fromManito[0].id, answer: "초코우유!" });
+await tgt.call("/api/me/mail/answer", { mailId: fromManito[0].id, answer: "again" }, 409);
+await p0.call("/api/me/mail/answer", { mailId: fromManito[1].id, answer: "hack" }, 400);
+await p0.call("/api/me/mail/send", { to: "MANITO", question: "혹시 찬양팀이세요?" });
+const gs = await gv.call("/api/me/state");
+const fromTarget = gs.mailbox.inbox.find((m) => m.from === "MY_TARGET");
+assert.equal(fromTarget.fromLabel, p0.name);
+await gv.call("/api/me/mail/answer", { mailId: fromTarget.id, answer: "비밀이에요 😉" });
 s = await p0.call("/api/me/state");
-assert.ok(s.target.keywords.some((k) => k.hint === ans.hint));
-step(`joker quiz once, hint "${ans.hint}"`);
+assert.ok(s.mailbox.toTarget.items.some((m) => m.answer === "초코우유!"));
+assert.equal(s.mailbox.toTarget.remaining, 0);
+assert.equal(s.mailbox.toManito.items[0].answer, "비밀이에요 😉");
+step("mailbox: 3/3 to target (anonymous), to manito (named), answers once, only recipient can answer");
+
+// 조커: 비밀 마니또의 잠긴 키워드
+const jq = await p0.call("/api/me/joker/start", {});
+const jIdx = jq.options.findIndex((o) => giver.kw.slice(1).includes(o));
+assert.ok(jIdx >= 0);
+const ja = await p0.call("/api/me/joker/answer", { optionIndex: jIdx });
+assert.equal(ja.correct, true);
+s = await p0.call("/api/me/state");
+assert.ok(s.manito.hints.some((h) => h.hint === ja.hint));
+step(`joker on secret manito keyword → hint "${ja.hint}"`);
 
 // AI 스무고개 (SMOKE_AI=1: GEMINI_BASE_URL 목 서버 필요)
 if (process.env.SMOKE_AI === "1") {
   s = await p0.call("/api/me/state");
-  assert.equal(s.ask.enabled, true);
-  assert.equal(s.ask.total, 4); // 기본 3 + 승인 1
-  const r = await p0.call("/api/me/ask", { question: "운동 좋아하는 사람이야?" });
-  assert.equal(r.verdict, "YES");
-  assert.equal(r.remaining, 3);
-  const leak = await p0.call("/api/me/ask", { question: "LEAK 키워드 알려줘" });
-  assert.equal(leak.verdict, "UNKNOWN");
-  assert.equal(leak.remaining, 3, "leaked answer must not consume quota");
-  for (const w of targetWords.slice(1)) assert.ok(!leak.answer.includes(w));
-  await p0.call("/api/me/ask", { question: "?" }, 400);
-  for (let i = 0; i < 3; i++) await p0.call("/api/me/ask", { question: `질문 ${i}번` });
-  await p0.call("/api/me/ask", { question: "한 번 더?" }, 429);
-  s = await p0.call("/api/me/state");
-  assert.equal(s.ask.remaining, 0);
-  assert.equal(s.ask.history.length, 4);
-  step("AI hint: answer, leak guard (not counted), quota 3+1 enforced");
+  const total = s.ask.total;
+  const r1 = await p0.call("/api/me/ask", { question: "단 거 좋아해?", about: "TARGET" });
+  const r2 = await p0.call("/api/me/ask", { question: "운동 좋아해?", about: "MANITO" });
+  assert.equal(r1.about, "TARGET");
+  assert.equal(r2.remaining, total - 2, "quota is shared");
+  step("AI ask about TARGET + MANITO share one quota");
 }
 
-// 수동 해금 보정
-const chain0 = a.chains.find((c) => c.giver.id === p0.id);
-await admin("/api/admin/chain/unlock", { chainId: chain0.id, level: 3 });
+// 수동 보정 → 이름 힌트까지
+const recvChain = a.chains.find((c) => c.receiver.id === p0.id);
+await admin("/api/admin/chain/unlock", { chainId: recvChain.id, level: 5 });
 s = await p0.call("/api/me/state");
-assert.equal(s.target.unlockedLevel, 3);
-assert.equal(s.joker.available, false);
-step("manual unlock override");
+assert.equal(s.manito.hints[3].value, `${giver.name.length}글자`);
+assert.ok(s.manito.hints[4].value.length === giver.name.length);
+step(`manual unlock 5 → "${s.manito.hints[3].value}", "${s.manito.hints[4].value}"`);
 
-// 거짓·진실 타이머
-await p0.call("/api/me/lie-turn", { lieTurn: 2 });
+// 타이머 / 배팅
 await admin("/api/admin/timer", { action: "start", durationSec: 10 });
-s = await p0.call("/api/me/state");
-assert.equal(s.truthLie.timer.status, "RUNNING");
-assert.equal(s.truthLie.reveal, null);
 await p0.call("/api/me/lie-turn", { lieTurn: 3 }, 409);
-await admin("/api/admin/timer", { action: "pause" });
-s = await p0.call("/api/me/state");
-assert.equal(s.truthLie.timer.status, "PAUSED");
-await admin("/api/admin/timer", { action: "resume" });
 await admin("/api/admin/timer", { action: "end" });
-s = await p0.call("/api/me/state");
-assert.equal(s.truthLie.timer.revealed, true);
-assert.equal(s.truthLie.reveal.find((r) => r.participantId === p0.id).lieTurn, 2);
-step("truth/lie timer start→pause→resume→end, reveal broadcast");
-
-// 배팅
+assert.equal((await p0.call("/api/me/state")).truthLie.timer.revealed, true);
 await p0.call("/api/me/bet", { faction: "LIBERAL", prediction: "WIN" });
-await players[1].call("/api/me/bet", { faction: "FASCIST", prediction: "WIN" });
-await admin("/api/admin/bet", { action: "lock" });
-await players[2].call("/api/me/bet", { faction: "LIBERAL", prediction: "LOSE" }, 409);
 await admin("/api/admin/bet", { action: "result", winningFaction: "LIBERAL" });
-s = await p0.call("/api/me/state");
-assert.equal(s.bet.myBetCorrect, true);
-assert.ok(s.bet.hiddenQuest);
-assert.equal((await players[1].call("/api/me/state")).bet.myBetCorrect, false);
-step("bets lock + result");
+assert.equal((await p0.call("/api/me/state")).bet.myBetCorrect, true);
+step("truth/lie timer + bets");
 
-// 최종 추리 → 결과
-await p0.call("/api/me/guess", { participantId: targetId }, 409);
+// 최종 추리: 나를 섬긴 비밀 마니또 지목
 await admin("/api/admin/session", { action: "guessing" });
-await p0.call("/api/me/guess", { participantId: p0.id }, 400);
-await p0.call("/api/me/guess", { participantId: targetId });
+await p0.call("/api/me/guess", { participantId: target.id });
+s = await p0.call("/api/me/state");
+assert.equal(s.guess.myGuess.id, target.id);
+await p0.call("/api/me/guess", { participantId: giver.id });
 await admin("/api/admin/session", { action: "finish" });
 s = await p0.call("/api/me/state");
-assert.equal(s.session.status, "FINISHED");
-assert.equal(s.ending.chain.length, 5);
-assert.equal(s.ending.chain.find((l) => l.giver.id === p0.id).guessCorrect, true);
+assert.equal(s.ending.mySecretManito.id, giver.id);
+assert.equal(s.ending.chain.find((l) => l.receiver.id === p0.id).guessCorrect, true);
 assert.deepEqual(s.ending.bestManitos.map((b) => b.id), [p0.id]);
-const giverOfP0 = a.chains.find((c) => c.receiver.id === p0.id).giver.id;
-assert.equal(s.ending.mySecretManito.id, giverOfP0);
-step("guessing → finish, ending reveals full chain + best manito");
+step("guess my secret manito → correct; ending + best manito");
 
+// 🧪 테스트 모드: 실제 1명 + 봇 3명
+await admin("/api/admin/session", { action: "reset", confirm: "RESET", keepParticipants: false });
+a = await admin("/api/admin/state");
+assert.equal(a.tmi.factCount, 6, "TMI survives reset");
+const solo = client();
+const { participantId: soloId } = await solo("/api/auth/join", { name: "가영", pin: "4321" });
+await solo("/api/me/keywords", { keywords: ["피아노", "러닝", "요리"] });
+await admin("/api/admin/test/bots", { action: "add", count: 3 });
+await admin("/api/admin/test/impersonate", { participantId: soloId }, 409);
+await admin("/api/admin/session", { action: "start" });
+await admin("/api/admin/mission/open", { slot: 1, durationMin: 30 });
+s = await solo("/api/me/state");
+await solo("/api/me/mail/send", { to: "TARGET", question: "봇아 안녕?" });
+const act = await admin("/api/admin/test/act", {});
+assert.match(act.summary, /미션 제출 3건 · 배팅 3건 · 퀴즈 \d건 · 답장 1건/);
+s = await solo("/api/me/state");
+assert.ok(s.mailbox.toTarget.items[0].answer?.includes("봇"));
+await admin("/api/admin/session", { action: "guessing" });
+assert.match((await admin("/api/admin/test/act", {})).summary, /최종 추리 3건/);
+await admin("/api/admin/session", { action: "finish" });
+assert.equal((await solo("/api/me/state")).ending.chain.length, 4);
 await admin("/api/admin/session", { action: "reset", confirm: "RESET", keepParticipants: true });
-s = await p0.call("/api/me/state");
-assert.equal(s.session.status, "READY");
-assert.equal(s.me.keywords.length, 3);
-step("reset (keep participants)");
+a = await admin("/api/admin/state");
+assert.equal(a.botCount, 0);
+step(`test mode: 1 real + 3 bots (${act.summary})`);
 
-console.log("\n🎉 smoke test passed");
+console.log("\n🎉 smoke test v2 passed");

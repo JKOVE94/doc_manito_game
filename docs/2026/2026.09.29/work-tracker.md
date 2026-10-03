@@ -35,6 +35,7 @@
 | 9 | 검증 | 유닛 16건, E2E 스모크(실제 API 풀게임+AI 목), RLS 확인, 360px 헤드리스 스크린샷, `next build` | `src/lib/game/game.test.ts`, `scripts/smoke.mjs` | Claude | ✅ | 검수 중 호스트 콘솔 거짓말 순번 기본 노출 → 기본 가림으로 수정 |
 | 9a | AI | AI 스무고개 힌트 백엔드 (Gemini, 유출 방지 2중 방어, 질문 쿼터) | `src/lib/server/{ask,gemini}.ts`, `src/lib/game/leak.ts`, `/api/me/ask` | Claude | ✅ | 목 서버로 E2E 검증 |
 | 9b | AI | AI 스무고개 채팅 패널 UI | `src/components/play/AskPanel.tsx` | Antigravity | ✅ | 검수 완료 |
+| 9c | 테스트 | 🧪 테스트 모드: 봇 참가자 추가/삭제, 봇 자동 행동, 봇으로 보기(봇만), RESET 시 봇 자동 삭제 | `src/lib/server/testmode.ts`, `/api/admin/test/*`, `TestTools.tsx` | Claude + Antigravity | ✅ | 1인+봇3 풀게임 스모크 통과. 클라우드 DB 에 `is_bot` 컬럼 추가 필요 |
 | 10 | 배포 | Supabase 스키마 적용, Vercel env 설정, 리허설 | README | 사용자 + Claude | ⏳ | |
 
 ## 3. 게임 진행 상태 머신

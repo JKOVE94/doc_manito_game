@@ -117,3 +117,56 @@ describe("leaksLockedKeyword", () => {
     expect(leaksLockedKeyword("몸을 움직이는 취미예요", ["춤"])).toBe(false);
   });
 });
+
+import { buildTmiQuiz, parseTmiText } from "./tmi";
+
+describe("parseTmiText", () => {
+  it("parses line formats and strips bullets", () => {
+    const facts = parseTmiText("- 가영: 피아노 10년 쳤음\n나래 | 매운 거 못 먹음\n다솜\t고양이 3마리\n그냥 문장\n1. 라희: 운동 싫어함");
+    expect(facts).toEqual([
+      { name: "가영", fact: "피아노 10년 쳤음" },
+      { name: "나래", fact: "매운 거 못 먹음" },
+      { name: "다솜", fact: "고양이 3마리" },
+      { name: "라희", fact: "운동 싫어함" },
+    ]);
+  });
+
+  it("parses JSON shapes", () => {
+    expect(parseTmiText('[{"name":"가영","fact":"a"},{"name":"나래","facts":["b","c"]}]')).toHaveLength(3);
+    expect(parseTmiText('{"가영":["a","b"],"나래":"c"}')).toHaveLength(3);
+  });
+
+  it("keeps colons inside the fact text", () => {
+    expect(parseTmiText("가영: 좋아하는 시간: 새벽 2시")).toEqual([{ name: "가영", fact: "좋아하는 시간: 새벽 2시" }]);
+  });
+});
+
+describe("buildTmiQuiz", () => {
+  const facts = [
+    { id: "f1", subject_name: "가 영", fact: "피아노" },
+    { id: "f2", subject_name: "나래", fact: "매운맛" },
+    { id: "f3", subject_name: "외부인", fact: "x" },
+  ];
+  const people = ["가영", "나래", "다솜", "라희"];
+
+  it("never quizzes the taker about themselves or unmatched names", () => {
+    for (let s = 0; s < 50; s++) {
+      const q = buildTmiQuiz(facts, "가영", people, new Set(), () => (s * 0.137) % 1)!;
+      expect(q.factId).toBe("f2");
+      expect(q.options).toHaveLength(4);
+      expect(q.options[q.answerIndex]).toBe("나래");
+      expect(new Set(q.options).size).toBe(4);
+    }
+  });
+
+  it("matches names ignoring spaces and skips used facts", () => {
+    const q = buildTmiQuiz(facts, "다솜", people, new Set(["f2"]))!;
+    expect(q.options[q.answerIndex]).toBe("가영");
+    expect(buildTmiQuiz(facts, "다솜", people, new Set(["f1", "f2"]))).toBeNull();
+  });
+
+  it("prefers excluding the taker from decoys", () => {
+    const q = buildTmiQuiz(facts, "다솜", [...people, "마루"], new Set(["f2"]))!;
+    expect(q.options).not.toContain("다솜");
+  });
+});

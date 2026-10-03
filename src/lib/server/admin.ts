@@ -4,10 +4,11 @@ import { generateAliases } from "@/lib/game/alias";
 import { buildSingleCycle } from "@/lib/game/cycle";
 import type { Faction, SubmissionStatus } from "@/lib/types";
 import { badRequest, conflict } from "./http";
+import { firstQuizAt } from "./quiz";
 import {
   bump,
   clampLevel,
-  countApproved,
+  hintPoints,
   getSession,
   listChains,
   listKeywords,
@@ -65,7 +66,7 @@ export async function startGame(force: boolean): Promise<void> {
       participants.map((p, i) =>
         db()
           .from("participants")
-          .update({ alias: aliases[i] })
+          .update({ alias: aliases[i], next_quiz_at: firstQuizAt() })
           .eq("id", p.id)
           .then((r) => must(r, "set alias")),
       ),
@@ -109,6 +110,8 @@ export async function setPhase(action: "guessing" | "finish" | "back-to-active")
 export async function resetGame(keepParticipants: boolean): Promise<void> {
   const session = await getSession();
   const sid = session.id;
+  // 테스트 봇은 옵션과 무관하게 항상 삭제 (실제 파티에 섞이지 않도록)
+  must(await db().from("participants").delete().eq("session_id", sid).eq("is_bot", true), "reset bots");
   if (keepParticipants) {
     must(await db().from("manito_chains").delete().eq("session_id", sid), "reset chains");
     must(await db().from("truth_lie_settings").delete().eq("session_id", sid), "reset truth-lie");
@@ -116,6 +119,13 @@ export async function resetGame(keepParticipants: boolean): Promise<void> {
     must(await db().from("participants").update({ alias: null }).eq("session_id", sid), "reset aliases");
   } else {
     must(await db().from("participants").delete().eq("session_id", sid), "reset participants");
+  }
+  // 퀴즈·AI 질문 삭제 + 퀴즈 예약 초기화 (TMI 데이터는 유지). 우편함은 체인 삭제 시 cascade
+  must(await db().from("tmi_quizzes").delete().eq("session_id", sid), "reset quizzes");
+  must(await db().from("ai_questions").delete().eq("session_id", sid), "reset ai questions");
+  must(await db().from("mails").delete().eq("session_id", sid), "reset mails");
+  if (keepParticipants) {
+    must(await db().from("participants").update({ next_quiz_at: null }).eq("session_id", sid), "reset quiz schedule");
   }
   // 미션 제출물 삭제 + 오픈 상태 초기화 (제목/설명은 유지)
   const missions = await listMissions(sid);
@@ -260,17 +270,17 @@ export async function reviewSubmission(submissionId: string, decision: Submissio
   await bump(session.id);
 }
 
-/** 해금 레벨 수동 보정: bonus = 목표레벨 - 승인기반레벨 */
+/** 힌트 단계 수동 보정 (receiver 가 비밀 마니또에 대해 아는 단계): bonus = 목표 - 포인트 기반 단계 */
 export async function setUnlockLevel(chainId: string, level: number): Promise<void> {
   const session = await getSession();
   const chain = (await listChains(session.id)).find((c) => c.id === chainId);
   if (!chain) throw badRequest("매칭을 찾을 수 없어요.");
-  const approved = await countApproved(session.id, chain.giver_id);
+  const { total } = await hintPoints(session.id, chain.receiver_id);
   const target = clampLevel(level);
   must(
     await db()
       .from("manito_chains")
-      .update({ unlocked_level: target, unlock_bonus: target - thresholdLevel(approved) })
+      .update({ unlocked_level: target, unlock_bonus: target - thresholdLevel(total) })
       .eq("id", chain.id),
     "set unlock level",
   );

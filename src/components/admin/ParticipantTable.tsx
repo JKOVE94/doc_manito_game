@@ -19,7 +19,25 @@ export function ParticipantTable({
   const [showLieNumbers, setShowLieNumbers] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [impersonateLoadingId, setImpersonateLoadingId] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const handleImpersonate = async (participantId: string) => {
+    setImpersonateLoadingId(participantId);
+    setErrorMsg(null);
+    try {
+      await api("/api/admin/test/impersonate", { participantId });
+      window.open("/play", "_blank");
+    } catch (err) {
+      if (err instanceof ApiRequestError) {
+        setErrorMsg(err.message);
+      } else {
+        setErrorMsg("봇 로그인 전환에 실패했습니다.");
+      }
+    } finally {
+      setImpersonateLoadingId(null);
+    }
+  };
 
   const handleDelete = async (participantId: string) => {
     setLoadingId(participantId);
@@ -67,7 +85,7 @@ export function ParticipantTable({
         </p>
       ) : (
         <div className="-mx-4 overflow-x-auto sm:mx-0">
-          <table className="w-full min-w-[560px] text-left text-sm">
+          <table className="w-full min-w-[620px] text-left text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-2 text-xs font-semibold text-ink-soft">
                 <th className="px-3 py-2.5">이름</th>
@@ -76,6 +94,7 @@ export function ParticipantTable({
                 <th className="px-3 py-2.5 text-center">
                   거짓말 순번 {showLieNumbers ? "(숫자)" : "(입력여부)"}
                 </th>
+                <th className="px-3 py-2.5 text-center">퀴즈</th>
                 <th className="px-3 py-2.5 text-center">배팅</th>
                 <th className="px-3 py-2.5 text-center">추리</th>
                 {sessionStatus === "READY" && (
@@ -91,7 +110,23 @@ export function ParticipantTable({
                 return (
                   <tr key={p.id} className="hover:bg-surface-2/50 transition-colors">
                     <td className="px-3 py-3 font-semibold text-ink">
-                      {p.name}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span>{p.name}</span>
+                        {p.isBot && <Badge tone="warn">봇</Badge>}
+                        {p.isBot && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            loading={impersonateLoadingId === p.id}
+                            disabled={impersonateLoadingId !== null}
+                            onClick={() => handleImpersonate(p.id)}
+                            className="min-h-7 px-1.5 py-0.5 text-[11px] font-medium text-brand hover:bg-brand/10"
+                            title="이 봇으로 새 탭에서 열기"
+                          >
+                            봇으로 보기
+                          </Button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-3 text-xs text-ink-soft">
                       {p.alias ? (
@@ -115,6 +150,9 @@ export function ParticipantTable({
                       ) : (
                         <span className="text-ink-soft">-</span>
                       )}
+                    </td>
+                    <td className="px-3 py-3 text-center text-xs font-semibold text-ink">
+                      {p.quizScore}점
                     </td>
                     <td className="px-3 py-3 text-center text-xs">
                       {p.hasBet ? (

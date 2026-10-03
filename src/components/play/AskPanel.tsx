@@ -3,11 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, ErrorText, Input } from "@/components/ui";
 import { api, ApiRequestError } from "@/lib/client/api";
-import type { AskEntryView, AskResult, AskVerdict, AskView } from "@/lib/types";
+import type { AskAbout, AskEntryView, AskResult, AskVerdict, AskView } from "@/lib/types";
 
 export interface AskPanelProps {
   ask: AskView | null;
-  alias: string;
+  targetName?: string;
   onRefresh: () => Promise<void>;
 }
 
@@ -25,19 +25,20 @@ export function AskPanel(props: AskPanelProps) {
   if (!props.ask) {
     return null;
   }
-  return <AskPanelInner ask={props.ask} alias={props.alias} onRefresh={props.onRefresh} />;
+  return <AskPanelInner ask={props.ask} targetName={props.targetName} onRefresh={props.onRefresh} />;
 }
 
 interface AskPanelInnerProps {
   ask: AskView;
-  alias: string;
+  targetName?: string;
   onRefresh: () => Promise<void>;
 }
 
-function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
+function AskPanelInner({ ask, targetName, onRefresh }: AskPanelInnerProps) {
+  const [about, setAbout] = useState<AskAbout>("TARGET");
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<{ text: string; about: AskAbout } | null>(null);
   const [lastResult, setLastResult] = useState<AskResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,13 +60,15 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
 
   const isInputDisabled = !ask.enabled || ask.remaining <= 0 || isLoading;
   const maxLength = ask.maxLength > 0 ? ask.maxLength : 100;
-  const targetAlias = alias || "타깃";
+  const friendName = targetName || "친구";
 
   const placeholder = !ask.enabled
     ? "게임 진행 중에만 사용할 수 있어요"
     : ask.remaining <= 0
       ? "질문 기회를 모두 썼어요"
-      : `예: "${targetAlias}님은 운동을 좋아하나요?"`;
+      : about === "TARGET"
+        ? `예: "${friendName}님은 운동을 좋아하나요?"`
+        : `예: "비밀 마니또는 저보다 키가 큰가요?"`;
 
   // Auto scroll down when new message or pending question appears
   useEffect(() => {
@@ -96,11 +99,11 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
     }
 
     setError(null);
-    setPendingQuestion(trimmed);
+    setPendingQuestion({ text: trimmed, about });
     setIsLoading(true);
 
     try {
-      const res = await api<AskResult>("/api/me/ask", { question: trimmed });
+      const res = await api<AskResult>("/api/me/ask", { question: trimmed, about });
       setQuestion("");
       setPendingQuestion(null);
       setLastResult(res);
@@ -138,7 +141,7 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
           </Badge>
         </div>
         <p className="mt-1 text-xs text-ink-soft">
-          미션을 완료하면 질문 기회가 1개씩 늘어나요
+          두 사람에 대한 질문 횟수를 함께 써요 (미션 완료 시 +1)
         </p>
       </div>
 
@@ -156,7 +159,7 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
       {/* Chat History Box (Internal Scroll) */}
       <div
         ref={scrollContainerRef}
-        className="flex max-h-72 min-h-24 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl bg-surface-2/40 p-3"
+        className="flex max-h-72 min-h-28 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl bg-surface-2/40 p-3"
       >
         {displayedHistory.length === 0 && !pendingQuestion ? (
           <div className="flex flex-1 flex-col items-center justify-center py-6 text-center text-xs text-ink-soft">
@@ -164,10 +167,10 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
               💭
             </span>
             <p className="font-semibold text-ink">
-              {targetAlias}님에 대해 자연어로 질문해 보세요!
+              자연어로 자유롭게 질문해 보세요!
             </p>
             <p className="mt-1 text-[11px] text-ink-soft/80">
-              AI가 예 / 아니오 / 조금 / 알 수 없음과 힌트로 답해드립니다.
+              내가 섬기는 {friendName} 님 또는 비밀 마니또를 선택하여 질문할 수 있어요.
             </p>
           </div>
         ) : (
@@ -175,13 +178,29 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
             {displayedHistory.map((item, idx) => {
               const verdictConf =
                 VERDICT_CONFIG[item.verdict] ?? { label: "알 수 없음", tone: "neutral" as const };
+              const isTargetQuestion = item.about === "TARGET";
 
               return (
                 <div key={`${item.createdAt || "history"}-${idx}`} className="flex flex-col gap-2">
                   {/* 내 질문 (오른쪽) */}
                   <div className="flex justify-end">
-                    <div className="max-w-[85%] rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs">
-                      {item.question}
+                    <div className="flex max-w-[85%] flex-col items-end gap-1">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-ink border border-line/60 shadow-2xs">
+                        {isTargetQuestion ? (
+                          <>
+                            <span>💝</span>
+                            <span>내가 섬기는 {friendName}</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>🎭</span>
+                            <span>비밀 마니또</span>
+                          </>
+                        )}
+                      </span>
+                      <div className="rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs">
+                        {item.question}
+                      </div>
                     </div>
                   </div>
 
@@ -206,8 +225,23 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
             {pendingQuestion && (
               <div className="flex flex-col gap-2">
                 <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs">
-                    {pendingQuestion}
+                  <div className="flex max-w-[85%] flex-col items-end gap-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-ink border border-line/60">
+                      {pendingQuestion.about === "TARGET" ? (
+                        <>
+                          <span>💝</span>
+                          <span>내가 섬기는 {friendName}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>🎭</span>
+                          <span>비밀 마니또</span>
+                        </>
+                      )}
+                    </span>
+                    <div className="rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs">
+                      {pendingQuestion.text}
+                    </div>
                   </div>
                 </div>
 
@@ -238,8 +272,38 @@ function AskPanelInner({ ask, alias, onRefresh }: AskPanelInnerProps) {
         )}
       </div>
 
-      {/* Input Form */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+      {/* Input Form with Target Toggle Segment */}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
+        {/* Toggle Segment */}
+        <div className="flex rounded-xl bg-surface-2 p-1">
+          <button
+            type="button"
+            onClick={() => setAbout("TARGET")}
+            disabled={isLoading}
+            className={`flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-bold transition ${
+              about === "TARGET"
+                ? "bg-surface text-brand shadow-xs"
+                : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            <span>💝</span>
+            <span>내가 섬기는 {friendName}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setAbout("MANITO")}
+            disabled={isLoading}
+            className={`flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-bold transition ${
+              about === "MANITO"
+                ? "bg-surface text-brand shadow-xs"
+                : "text-ink-soft hover:text-ink"
+            }`}
+          >
+            <span>🎭</span>
+            <span>비밀 마니또</span>
+          </button>
+        </div>
+
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Input

@@ -6,12 +6,11 @@ import { api, ApiRequestError } from "@/lib/client/api";
 import type { ParticipantState } from "@/lib/types";
 
 interface GuessCardProps {
-  targetAlias: string;
   guess: NonNullable<ParticipantState["guess"]>;
   refresh: () => Promise<void>;
 }
 
-export function GuessCard({ targetAlias, guess, refresh }: GuessCardProps) {
+export function GuessCard({ guess, refresh }: GuessCardProps) {
   const currentGuessId = guess.myGuess?.id ?? "";
   const [selectedId, setSelectedId] = useState<string>(currentGuessId);
   const [prevGuessId, setPrevGuessId] = useState<string>(currentGuessId);
@@ -28,7 +27,7 @@ export function GuessCard({ targetAlias, guess, refresh }: GuessCardProps) {
 
   const handleSubmitGuess = async () => {
     if (!selectedId) {
-      setErrorMsg("마니또 후보를 한 명 선택해주세요.");
+      setErrorMsg("비밀 마니또 후보를 한 명 선택해 주세요.");
       return;
     }
 
@@ -62,10 +61,10 @@ export function GuessCard({ targetAlias, guess, refresh }: GuessCardProps) {
 
       <div className="mt-3">
         <h3 className="text-lg font-bold text-ink">
-          내 타깃 &apos;{targetAlias}&apos;님은 누구일까요?
+          🎭 나를 섬긴 비밀 마니또는 누구일까요?
         </h3>
         <p className="mt-1 text-xs leading-relaxed text-ink-soft">
-          지금까지 해금된 키워드와 파티 현장의 단서를 바탕으로, 내가 섬긴 타깃의 진짜 정체를 맞혀보세요!
+          지금까지 해금된 키워드와 힌트를 바탕으로, 나를 섬겨준 비밀 마니또의 진짜 정체를 맞혀보세요!
         </p>
       </div>
 
@@ -87,7 +86,7 @@ export function GuessCard({ targetAlias, guess, refresh }: GuessCardProps) {
           htmlFor="guess-candidate-select"
           className="text-xs font-semibold text-ink"
         >
-          후보자 선택 (나를 제외한 참가자)
+          비밀 마니또 후보 선택 (나를 제외한 참가자)
         </label>
 
         <select

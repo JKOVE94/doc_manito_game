@@ -176,6 +176,25 @@ export function SubmissionReview({
                   제출자: <strong className="text-ink">{s.participant.name}</strong>
                 </div>
 
+                {s.photoUrl ? (
+                  <a
+                    href={s.photoUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block overflow-hidden rounded-lg border border-line bg-surface-2 transition hover:opacity-95"
+                    title="새 탭에서 원본 사진 보기"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={s.photoUrl}
+                      alt={`${s.participant.name} 미션 사진`}
+                      className="w-full max-h-64 object-cover"
+                    />
+                  </a>
+                ) : (
+                  <div className="text-xs italic text-ink-soft">사진 없음</div>
+                )}
+
                 {s.note ? (
                   <div className="rounded-lg bg-surface-2 p-2.5 text-xs text-ink whitespace-pre-wrap">
                     {s.note}

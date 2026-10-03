@@ -10,15 +10,18 @@ import type { ParticipantState, SessionStatus } from "@/lib/types";
 import { TimerBanner } from "@/components/play/TimerBanner";
 import { PrepView } from "@/components/play/PrepView";
 import { TargetCard } from "@/components/play/TargetCard";
+import { ManitoCard } from "@/components/play/ManitoCard";
 import { AskPanel } from "@/components/play/AskPanel";
 import { JokerModal } from "@/components/play/JokerModal";
 import { MissionList } from "@/components/play/MissionList";
+import { MailboxPanel } from "@/components/play/MailboxPanel";
+import { QuizModal } from "@/components/play/QuizModal";
 import { TruthLiePanel } from "@/components/play/TruthLiePanel";
 import { BetPanel } from "@/components/play/BetPanel";
 import { GuessCard } from "@/components/play/GuessCard";
 import { EndingView } from "@/components/play/EndingView";
 
-type ActiveTab = "target" | "missions" | "truthLie" | "bet";
+type ActiveTab = "target" | "missions" | "mailbox" | "truthLie" | "bet";
 
 const STATUS_LABELS: Record<SessionStatus, { label: string; tone: "neutral" | "brand" | "warn" | "accent" }> = {
   READY: { label: "준비중", tone: "neutral" },
@@ -58,18 +61,6 @@ export default function PlayPage() {
   const handleOpenJoker = () => {
     setDismissedPendingQuiz(false);
     setJokerModalOpen(true);
-  };
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await api("/api/auth/logout", {});
-      router.replace("/");
-    } catch {
-      router.replace("/");
-    } finally {
-      setLoggingOut(false);
-    }
   };
 
   // Loading state
@@ -116,6 +107,18 @@ export default function PlayPage() {
   const statusInfo = STATUS_LABELS[sessionStatus] ?? { label: sessionStatus, tone: "neutral" };
   const isDashboardMode = sessionStatus === "ACTIVE" || sessionStatus === "GUESSING";
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await api("/api/auth/logout", {});
+      router.replace("/");
+    } catch {
+      router.replace("/");
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   return (
     <div className="min-h-dvh bg-bg text-ink">
       {/* Sticky Mini Timer Banner across all screens when timer is RUNNING or PAUSED */}
@@ -129,6 +132,15 @@ export default function PlayPage() {
           }
         }}
       />
+
+      {/* Spontaneous TMI Quiz Modal across all tabs */}
+      {data.quiz?.pending && (
+        <QuizModal
+          quiz={data.quiz.pending}
+          clockOffsetMs={clockOffsetMs}
+          refresh={refresh}
+        />
+      )}
 
       {/* Main Container */}
       <div className={`mx-auto w-full max-w-md px-4 pt-4 ${isDashboardMode ? "pb-24" : "pb-8"}`}>
@@ -145,6 +157,11 @@ export default function PlayPage() {
               </div>
               <div className="flex items-center gap-1.5">
                 <Badge tone={statusInfo.tone}>{statusInfo.label}</Badge>
+                {data.quiz && (
+                  <Badge tone="accent">
+                    🧠 {data.quiz.score}점
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -171,52 +188,81 @@ export default function PlayPage() {
             {/* If GUESSING: Top Guess Card */}
             {sessionStatus === "GUESSING" && data.guess && (
               <GuessCard
-                targetAlias={data.target?.alias ?? "타깃"}
                 guess={data.guess}
                 refresh={refresh}
               />
             )}
 
-            {/* Tab Contents */}
+            {/* Tab 1: 마니또 */}
             {activeTab === "target" && (
-              <>
+              <div className="flex flex-col gap-4">
+                {/* 내가 섬기는 친구 카드 */}
                 {data.target ? (
-                  <TargetCard
-                    target={data.target}
-                    approvedMissionCount={data.approvedMissionCount}
-                    nextUnlockAt={data.nextUnlockAt}
+                  <TargetCard target={data.target} />
+                ) : (
+                  <Card className="py-8 text-center text-xs text-ink-soft">
+                    섬길 친구 정보를 불러올 수 없습니다.
+                  </Card>
+                )}
+
+                {/* 나를 섬기는 비밀 마니또 힌트 카드 */}
+                {data.manito ? (
+                  <ManitoCard
+                    manito={data.manito}
                     joker={data.joker}
                     onOpenJokerModal={handleOpenJoker}
                   />
                 ) : (
                   <Card className="py-8 text-center text-xs text-ink-soft">
-                    타깃 마니또 정보를 불러올 수 없습니다.
+                    비밀 마니또 힌트 정보를 불러올 수 없습니다.
                   </Card>
                 )}
 
+                {/* AI 스무고개 패널 */}
                 <AskPanel
                   ask={data.ask}
-                  alias={data.target?.alias ?? "타깃"}
+                  targetName={data.target?.name}
                   onRefresh={refresh}
                 />
 
+                {/* 조커 모달 */}
                 <JokerModal
                   isOpen={isJokerModalVisible}
                   onClose={handleCloseJoker}
                   joker={data.joker}
                   refresh={refresh}
                 />
-              </>
+              </div>
             )}
 
+            {/* Tab 2: 미션 */}
             {activeTab === "missions" && (
               <MissionList
                 missions={data.missions}
+                target={data.target}
                 clockOffsetMs={clockOffsetMs}
                 refresh={refresh}
               />
             )}
 
+            {/* Tab 3: 우편함 */}
+            {activeTab === "mailbox" && (
+              <>
+                {data.mailbox ? (
+                  <MailboxPanel
+                    mailbox={data.mailbox}
+                    targetName={data.target?.name ?? "타깃"}
+                    refresh={refresh}
+                  />
+                ) : (
+                  <Card className="py-8 text-center text-xs text-ink-soft">
+                    우편함 정보를 불러올 수 없습니다.
+                  </Card>
+                )}
+              </>
+            )}
+
+            {/* Tab 4: 거짓·진실 게임 */}
             {activeTab === "truthLie" && (
               <TruthLiePanel
                 truthLie={data.truthLie}
@@ -226,6 +272,7 @@ export default function PlayPage() {
               />
             )}
 
+            {/* Tab 5: 배팅 */}
             {activeTab === "bet" && (
               <>
                 {data.bet ? (
@@ -260,7 +307,7 @@ export default function PlayPage() {
           aria-label="하단 탭 메뉴"
           className="fixed bottom-0 left-0 right-0 z-40 border-t border-line bg-surface/95 backdrop-blur-md"
         >
-          <div className="mx-auto flex max-w-md items-center justify-around px-2 py-1.5">
+          <div className="mx-auto flex max-w-md items-center justify-around px-1 py-1.5">
             {/* 1. 마니또 탭 */}
             <button
               type="button"
@@ -298,11 +345,35 @@ export default function PlayPage() {
               </span>
               <span className="text-[11px] leading-tight">미션</span>
               {data.missions.some((m) => m.isActive) && (
-                <span className="absolute right-4 top-1.5 h-2 w-2 rounded-full bg-brand" />
+                <span className="absolute right-3 top-1.5 h-2 w-2 rounded-full bg-brand" />
               )}
             </button>
 
-            {/* 3. 게임 (거짓·진실) 탭 */}
+            {/* 3. 우편함 탭 */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("mailbox");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`relative flex min-h-12 flex-1 flex-col items-center justify-center rounded-xl py-1 text-xs font-semibold transition active:scale-95 ${
+                activeTab === "mailbox"
+                  ? "text-brand"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              <span className="text-lg" aria-hidden="true">
+                💌
+              </span>
+              <span className="text-[11px] leading-tight">우편함</span>
+              {data.mailbox && data.mailbox.unansweredCount > 0 && (
+                <span className="absolute right-2 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white leading-none">
+                  {data.mailbox.unansweredCount}
+                </span>
+              )}
+            </button>
+
+            {/* 4. 거짓·진실 탭 */}
             <button
               type="button"
               onClick={() => {
@@ -320,11 +391,11 @@ export default function PlayPage() {
               </span>
               <span className="text-[11px] leading-tight">거짓·진실</span>
               {(data.truthLie.timer.status === "RUNNING" || data.truthLie.timer.status === "PAUSED") && (
-                <span className="absolute right-3 top-1.5 h-2 w-2 animate-ping rounded-full bg-warn" />
+                <span className="absolute right-2 top-1.5 h-2 w-2 animate-ping rounded-full bg-warn" />
               )}
             </button>
 
-            {/* 4. 배팅 탭 */}
+            {/* 5. 배팅 탭 */}
             <button
               type="button"
               onClick={() => {
