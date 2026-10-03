@@ -285,11 +285,12 @@ step(`joker on secret manito keyword → hint "${ja.hint}"`);
 if (process.env.SMOKE_AI === "1") {
   s = await p0.call("/api/me/state");
   const total = s.ask.total;
-  const r1 = await p0.call("/api/me/ask", { question: "단 거 좋아해?", about: "TARGET" });
-  const r2 = await p0.call("/api/me/ask", { question: "운동 좋아해?", about: "MANITO" });
-  assert.equal(r1.about, "TARGET");
-  assert.equal(r2.remaining, total - 2, "quota is shared");
-  step("AI ask about TARGET + MANITO share one quota");
+  const r1 = await p0.call("/api/me/ask", { question: "단 거 좋아해?" });
+  const r2 = await p0.call("/api/me/ask", { question: "운동 좋아해?", about: "TARGET" }); // about 은 무시: 비밀 마니또 전용
+  assert.equal(r1.about, "MANITO");
+  assert.equal(r2.about, "MANITO");
+  assert.equal(r2.remaining, total - 2);
+  step("AI ask is about the secret manito only (the served friend is already public)");
 }
 
 // 수동 보정 → 이름 힌트까지
@@ -304,7 +305,37 @@ step(`manual unlock 5 → "${s.manito.hints[3].value}", "${s.manito.hints[4].val
 await admin("/api/admin/timer", { action: "start", durationSec: 10 });
 await p0.call("/api/me/lie-turn", { lieTurn: 3 }, 409);
 await admin("/api/admin/timer", { action: "end" });
-assert.equal((await p0.call("/api/me/state")).truthLie.timer.revealed, true);
+// 종료 직후엔 공개되지 않고 5분 뒤 자동 공개 예정
+s = await p0.call("/api/me/state");
+assert.equal(s.truthLie.timer.status, "ENDED");
+assert.equal(s.truthLie.timer.revealed, false);
+assert.equal(s.truthLie.reveal, null, "lie turns hidden right after the timer ends");
+const waitMin = (Date.parse(s.truthLie.timer.revealAt) - Date.parse(s.serverNow)) / 60_000;
+assert.ok(waitMin > 4.8 && waitMin <= 5.05, `auto reveal ~5 min after end (got ${waitMin.toFixed(2)})`);
+if (process.env.DB_URL) {
+  const { default: cp } = await import("node:child_process");
+  const psql = (sql) => cp.execFileSync("docker", ["exec", "supabase_db_doc_manito_game", "psql", "-U", "postgres", "-tAc", sql]).toString().trim();
+  psql("update game_sessions set tl_reveal_at = now() + interval '30 seconds' where code='main'");
+  assert.equal((await p0.call("/api/me/state")).truthLie.reveal, null, "still hidden before the reveal time");
+  psql("update game_sessions set tl_reveal_at = now() - interval '1 second' where code='main'");
+  s = await p0.call("/api/me/state");
+  assert.equal(s.truthLie.timer.revealed, true, "auto revealed once the time has passed");
+  assert.equal(s.truthLie.timer.revealAt, null);
+  assert.ok(s.truthLie.reveal.length > 0);
+  // 타이머가 시간 만료로 끝난 경우(lazy)에도 동일하게 5분 대기
+  await admin("/api/admin/timer", { action: "reset" });
+  await admin("/api/admin/timer", { action: "start", durationSec: 600 });
+  psql("update game_sessions set tl_ends_at = now() - interval '1 second' where code='main'");
+  s = await p0.call("/api/me/state");
+  assert.equal(s.truthLie.timer.status, "ENDED");
+  assert.equal(s.truthLie.timer.revealed, false, "expiry also waits before revealing");
+  assert.ok(s.truthLie.timer.revealAt);
+}
+await admin("/api/admin/timer", { action: "reveal" }); // 호스트는 즉시 공개 가능
+s = await p0.call("/api/me/state");
+assert.equal(s.truthLie.timer.revealed, true);
+assert.equal(s.truthLie.timer.revealAt, null);
+step("lie turns: hidden for 5 min after the timer ends (end & expiry), then auto-revealed; host can reveal now");
 await p0.call("/api/me/bet", { faction: "LIBERAL", prediction: "WIN" });
 await admin("/api/admin/bet", { action: "result", winningFaction: "LIBERAL" });
 assert.equal((await p0.call("/api/me/state")).bet.myBetCorrect, true);

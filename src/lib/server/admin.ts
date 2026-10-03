@@ -16,6 +16,7 @@ import {
   listParticipants,
   nextMissionAt,
   openNextUnopenedMission,
+  revealAtFromNow,
   recomputeUnlock,
   type SessionRow,
   thresholdLevel,
@@ -153,6 +154,7 @@ export async function resetGame(keepParticipants: boolean): Promise<void> {
     tl_ends_at: null,
     tl_remaining_sec: null,
     tl_revealed: false,
+    tl_reveal_at: null,
     bet_status: "OPEN",
     winning_faction: null,
   });
@@ -180,6 +182,7 @@ export async function controlTimer(action: TimerAction, durationSec?: number): P
         tl_ends_at: new Date(now + dur * 1000).toISOString(),
         tl_remaining_sec: dur,
         tl_revealed: false,
+        tl_reveal_at: null,
       });
     }
     case "pause": {
@@ -193,18 +196,26 @@ export async function controlTimer(action: TimerAction, durationSec?: number): P
       return updateSession(s, { tl_status: "RUNNING", tl_ends_at: new Date(now + remaining * 1000).toISOString() });
     }
     case "end":
-      return updateSession(s, { tl_status: "ENDED", tl_ends_at: null, tl_remaining_sec: 0, tl_revealed: true });
+      // 종료 → 순번은 5분 뒤 자동 공개 (즉시 공개는 '전원 거짓말 순번 공개' 버튼)
+      return updateSession(s, {
+        tl_status: "ENDED",
+        tl_ends_at: null,
+        tl_remaining_sec: 0,
+        tl_revealed: false,
+        tl_reveal_at: revealAtFromNow(),
+      });
     case "reset":
       return updateSession(s, {
         tl_status: "IDLE",
         tl_ends_at: null,
         tl_remaining_sec: s.tl_duration_sec,
         tl_revealed: false,
+        tl_reveal_at: null,
       });
     case "reveal":
-      return updateSession(s, { tl_revealed: true });
+      return updateSession(s, { tl_revealed: true, tl_reveal_at: null });
     case "hide":
-      return updateSession(s, { tl_revealed: false });
+      return updateSession(s, { tl_revealed: false, tl_reveal_at: null });
   }
 }
 

@@ -2,6 +2,7 @@ import "server-only";
 import { randomInt } from "node:crypto";
 import {
   DEFAULT_MISSIONS,
+  TRUTH_LIE_REVEAL_DELAY_MIN,
   MAX_HINT_LEVEL,
   MISSION_DURATION_MIN,
   MISSION_FIRST_DELAY_MIN,
@@ -23,6 +24,7 @@ export interface SessionRow {
   tl_ends_at: string | null;
   tl_remaining_sec: number | null;
   tl_revealed: boolean;
+  tl_reveal_at: string | null;
   bet_status: BetStatus;
   winning_faction: Faction | null;
   started_at: string | null;
@@ -125,7 +127,7 @@ export async function getSession(): Promise<SessionRow> {
     const updated = must(
       await db()
         .from("game_sessions")
-        .update({ tl_status: "ENDED", tl_remaining_sec: 0, tl_revealed: true })
+        .update({ tl_status: "ENDED", tl_remaining_sec: 0, tl_revealed: false, tl_reveal_at: revealAtFromNow() })
         .eq("id", session.id)
         .eq("tl_status", "RUNNING")
         .eq("tl_ends_at", session.tl_ends_at)
@@ -138,7 +140,29 @@ export async function getSession(): Promise<SessionRow> {
       session = { ...updated, revision: updated.revision + 1 };
     }
   }
+  session = await autoReveal(session);
   return autoOpenMission(session);
+}
+
+export const revealAtFromNow = () => new Date(Date.now() + TRUTH_LIE_REVEAL_DELAY_MIN * 60_000).toISOString();
+
+/** 타이머 종료 후 예약된 공개 시각이 지나면 순번을 자동 공개 (lazy, 조건부 update 로 한 번만) */
+async function autoReveal(session: SessionRow): Promise<SessionRow> {
+  if (session.tl_status !== "ENDED" || session.tl_revealed || !session.tl_reveal_at) return session;
+  if (Date.parse(session.tl_reveal_at) > Date.now()) return session;
+  const updated = must(
+    await db()
+      .from("game_sessions")
+      .update({ tl_revealed: true })
+      .eq("id", session.id)
+      .eq("tl_revealed", false)
+      .select("*")
+      .maybeSingle<SessionRow>(),
+    "auto reveal",
+  );
+  if (!updated) return session;
+  await bump(session.id);
+  return { ...updated, revision: updated.revision + 1 };
 }
 
 const minutesFromNow = ([lo, hi]: [number, number]) =>
@@ -221,6 +245,7 @@ export function timerView(s: SessionRow): TimerView {
     endsAt: s.tl_status === "RUNNING" ? s.tl_ends_at : null,
     remainingSec,
     revealed: s.tl_revealed,
+    revealAt: s.tl_status === "ENDED" && !s.tl_revealed ? s.tl_reveal_at : null,
   };
 }
 

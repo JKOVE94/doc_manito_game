@@ -87,3 +87,7 @@
 | POST | `/api/admin/setup` | `{ password }` (4~100자) | `{ ok }` | needsSetup 일 때만. 비밀번호 저장 + 바로 로그인 |
 | POST | `/api/admin/password` | `{ currentPassword, newPassword }` | `{ ok }` | 관리자 로그인 필요. 변경 즉시 다른 기기 관리자 세션 만료, 현재 기기는 재로그인 처리 |
 - `SESSION_SECRET` 환경변수 불필요 (DB 자동 생성). `ADMIN_PASSWORD` 는 DB 미설정 시 fallback.
+
+### 변경 (2026-10-04)
+- `POST /api/me/ask` — `about` 파라미터 폐지. **나를 섬기는 비밀 마니또에 대해서만** 질문 (섬기는 친구는 이미 공개). 본문 `{ question }`
+- 거짓·진실 타이머: 종료(수동 종료 또는 시간 만료) 후 **5분 뒤 순번 자동 공개**. `TimerView.revealAt` (공개 전·종료 상태에서만 값). 호스트의 `reveal` 액션은 즉시 공개

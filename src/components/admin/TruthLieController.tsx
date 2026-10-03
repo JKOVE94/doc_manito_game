@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api, ApiRequestError } from "@/lib/client/api";
 import { remainingSeconds } from "@/lib/client/useLiveState";
+import { RevealCountdown } from "@/components/RevealCountdown";
 import { Badge, Button, Card, ErrorText, formatClock, Input, SectionTitle } from "@/components/ui";
 import type { TimerStatus, TruthLieRevealRow, TimerView } from "@/lib/types";
 
@@ -209,9 +210,15 @@ export function TruthLieController({
         <div className="flex flex-col">
           <span className="text-sm font-semibold text-ink">거짓말 순번 공개</span>
           <span className="text-xs text-ink-soft">
-            {timer.revealed
-              ? "참가자 대시보드에 순번이 공개되어 있습니다."
-              : "참가자에게 순번이 숨겨져 있습니다."}
+            {timer.revealed ? (
+              "참가자 대시보드에 순번이 공개되어 있습니다."
+            ) : timer.revealAt ? (
+              <>
+                종료 후 자동 공개까지 <RevealCountdown revealAt={timer.revealAt} clockOffsetMs={clockOffsetMs} /> (바로 공개하려면 버튼)
+              </>
+            ) : (
+              "참가자에게 순번이 숨겨져 있습니다."
+            )}
           </span>
         </div>
         <Button

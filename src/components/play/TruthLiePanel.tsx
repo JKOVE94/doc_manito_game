@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Badge, Card, ErrorText, formatClock, SectionTitle } from "@/components/ui";
 import { api, ApiRequestError } from "@/lib/client/api";
 import { remainingSeconds } from "@/lib/client/useLiveState";
+import { RevealCountdown } from "@/components/RevealCountdown";
 import type { ParticipantState } from "@/lib/types";
 
 interface TruthLiePanelProps {
@@ -213,6 +214,16 @@ export function TruthLiePanel({
                 ? "발언 시간이 모두 종료되었습니다."
                 : "호스트가 타이머를 시작하면 카운트다운이 시작됩니다."}
         </p>
+
+        {isEnded && !timer.revealed && timer.revealAt && (
+          <div className="mt-3 rounded-xl border border-brand/30 bg-brand/10 p-3 text-center text-sm">
+            🤔 누가 몇 번째에 거짓말을 했을까요?
+            <br />
+            <span className="text-ink-soft">
+              거짓말 순번은 <RevealCountdown revealAt={timer.revealAt} clockOffsetMs={clockOffsetMs} /> 뒤에 공개돼요. 그 전에 마지막으로 추리해 보세요!
+            </span>
+          </div>
+        )}
       </Card>
 
       {/* 3. 거짓말 순번 공개 (reveal) */}

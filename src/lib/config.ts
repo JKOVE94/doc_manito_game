@@ -74,3 +74,6 @@ export const AWAY_RETURN_BUFFER_MIN = 10;
 export const MISSION_FIRST_DELAY_MIN: [number, number] = [5, 15];
 export const MISSION_INTERVAL_MIN: [number, number] = [25, 35];
 export const MISSION_DURATION_MIN = 30;
+
+/** 거짓·진실 게임: 타이머가 끝난 뒤 거짓말 순번이 자동 공개되기까지의 여유 시간(분) */
+export const TRUTH_LIE_REVEAL_DELAY_MIN = 5;

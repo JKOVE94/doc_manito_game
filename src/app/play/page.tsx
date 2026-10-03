@@ -22,6 +22,7 @@ import { GuessCard } from "@/components/play/GuessCard";
 import { EndingView } from "@/components/play/EndingView";
 import { ShuffleReveal } from "@/components/play/ShuffleReveal";
 import { AwayControl } from "@/components/play/AwayControl";
+import { MyInfoModal } from "@/components/play/MyInfoModal";
 
 type ActiveTab = "target" | "missions" | "mailbox" | "truthLie" | "bet";
 
@@ -40,6 +41,7 @@ export default function PlayPage() {
   const [jokerModalOpen, setJokerModalOpen] = useState(false);
   const [dismissedPendingQuiz, setDismissedPendingQuiz] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
   const [revealDone, setRevealDone] = useState<string | null>(null);
   const [showAwayConfirm, setShowAwayConfirm] = useState(false);
 
@@ -145,6 +147,7 @@ export default function PlayPage() {
 
   return (
     <div className="min-h-dvh bg-bg text-ink">
+      {infoOpen && <MyInfoModal state={data} onClose={() => setInfoOpen(false)} />}
       {showReveal && data.target && (
         <ShuffleReveal
           targetName={data.target.name}
@@ -179,7 +182,7 @@ export default function PlayPage() {
         {/* Common Header */}
         <header className="mb-4 flex items-center justify-between border-b border-line/60 pb-3">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand/10 text-lg">
+            <div className="hidden h-9 w-9 items-center justify-center rounded-xl bg-brand/10 text-lg min-[400px]:flex">
               🎁
             </div>
             <div>
@@ -205,12 +208,21 @@ export default function PlayPage() {
                 active={showAwayConfirm}
               />
             )}
+            <button
+              type="button"
+              onClick={() => setInfoOpen(true)}
+              aria-label="내 정보 보기"
+              title="내 정보"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-2 text-lg transition active:scale-95"
+            >
+              📋
+            </button>
             <Button
               variant="ghost"
               onClick={handleLogout}
               loading={loggingOut}
               disabled={loggingOut}
-              className="!min-h-9 !px-2.5 text-xs text-ink-soft hover:text-ink"
+              className="!min-h-9 !px-2 text-xs whitespace-nowrap text-ink-soft hover:text-ink"
             >
               로그아웃
             </Button>
@@ -272,11 +284,7 @@ export default function PlayPage() {
                 )}
 
                 {/* AI 스무고개 패널 */}
-                <AskPanel
-                  ask={data.ask}
-                  targetName={data.target?.name}
-                  onRefresh={refresh}
-                />
+                <AskPanel ask={data.ask} onRefresh={refresh} />
 
                 {/* 조커 모달 */}
                 <JokerModal

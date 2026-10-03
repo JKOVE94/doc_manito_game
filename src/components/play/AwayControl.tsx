@@ -201,7 +201,7 @@ export function AwayButton({
       variant="secondary"
       onClick={onClick}
       className={cx(
-        "!min-h-9 !px-2.5 text-xs text-ink transition-colors",
+        "!min-h-9 !px-2 text-xs whitespace-nowrap text-ink transition-colors",
         active && "border-warn/60 bg-warn/15",
         className,
       )}

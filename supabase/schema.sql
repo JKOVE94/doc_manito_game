@@ -314,3 +314,6 @@ alter table public.game_sessions add column if not exists next_mission_at timest
 
 -- 준비 완료 (게임 시작 전 참가자가 키워드 입력 후 [준비] 버튼)
 alter table public.participants add column if not exists is_ready boolean not null default false;
+
+-- 거짓·진실 게임: 타이머 종료 후 일정 시간 뒤 순번 자동 공개
+alter table public.game_sessions add column if not exists tl_reveal_at timestamptz;

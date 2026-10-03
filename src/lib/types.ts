@@ -24,6 +24,8 @@ export interface TimerView {
   /** PAUSED/IDLE 일 때 남은 초 */
   remainingSec: number;
   revealed: boolean;
+  /** 타이머 종료 후 자동 공개 예정 시각 (공개 전·종료 상태에서만 값이 있음) */
+  revealAt: string | null;
 }
 
 export interface KeywordSlotView {
@@ -185,10 +187,10 @@ export interface EndingView {
 
 export type AskVerdict = "YES" | "NO" | "PARTLY" | "UNKNOWN";
 
-export type AskAbout = "TARGET" | "MANITO";
+/** AI 스무고개 대상: 나를 섬기는 비밀 마니또만 (섬기는 친구는 이미 공개) */
+export type AskAbout = "MANITO";
 
 export interface AskEntryView {
-  /** TARGET = 내가 섬기는 사람(Notion TMI 기반) / MANITO = 나를 섬기는 비밀 마니또(해금 정보 기반) */
   about: AskAbout;
   question: string;
   verdict: AskVerdict; // 예 / 아니오 / 조금 / 알 수 없음
@@ -196,7 +198,7 @@ export interface AskEntryView {
   createdAt: string;
 }
 
-/** AI 스무고개 (두 대상에 대해 자연어 질문, 질문 횟수 공유) */
+/** AI 스무고개 (비밀 마니또에 대해 자연어 질문) */
 export interface AskView {
   /** 서버에 GEMINI_API_KEY 가 설정되어 있고 게임이 ACTIVE 인지 */
   enabled: boolean;

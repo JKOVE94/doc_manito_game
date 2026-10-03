@@ -22,11 +22,6 @@ export async function listFacts(sessionId: string): Promise<FactRow[]> {
   ) as FactRow[];
 }
 
-/** 특정 참가자의 TMI (주인공 이름 부분 일치로 연결) */
-export function factsAbout(facts: FactRow[], name: string, participantNames: readonly string[]): string[] {
-  return facts.filter((f) => matchSubject(f.subject_name, participantNames) === name).map((f) => f.fact);
-}
-
 /** 관리자: TMI 전체 교체 */
 export async function replaceFacts(text: string): Promise<{ ok: true; factCount: number; quizCount: number }> {
   const parsed: TmiFact[] = parseTmiText(text);

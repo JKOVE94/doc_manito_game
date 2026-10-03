@@ -3,134 +3,79 @@
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, ErrorText, Input } from "@/components/ui";
 import { api, ApiRequestError } from "@/lib/client/api";
-import type { AskAbout, AskEntryView, AskResult, AskVerdict, AskView } from "@/lib/types";
+import type { AskEntryView, AskResult, AskVerdict, AskView } from "@/lib/types";
 
 export interface AskPanelProps {
   ask: AskView | null;
-  targetName?: string;
   onRefresh: () => Promise<void>;
 }
 
-const VERDICT_CONFIG: Record<
-  AskVerdict,
-  { label: string; tone: "accent" | "danger" | "warn" | "neutral" }
-> = {
+const VERDICT_CONFIG: Record<AskVerdict, { label: string; tone: "accent" | "danger" | "warn" | "neutral" }> = {
   YES: { label: "예", tone: "accent" },
   NO: { label: "아니오", tone: "danger" },
   PARTLY: { label: "조금", tone: "warn" },
   UNKNOWN: { label: "알 수 없음", tone: "neutral" },
 };
 
-export function AskPanel(props: AskPanelProps) {
-  if (!props.ask) {
-    return null;
-  }
-  return <AskPanelInner ask={props.ask} targetName={props.targetName} onRefresh={props.onRefresh} />;
+/** 🔮 AI 스무고개: 나를 섬기는 비밀 마니또에 대해서만 질문 (섬기는 친구는 이미 공개라 제외) */
+export function AskPanel({ ask, onRefresh }: AskPanelProps) {
+  if (!ask) return null;
+  return <AskPanelInner ask={ask} onRefresh={onRefresh} />;
 }
 
-interface AskPanelInnerProps {
-  ask: AskView;
-  targetName?: string;
-  onRefresh: () => Promise<void>;
-}
-
-function AskPanelInner({ ask, targetName, onRefresh }: AskPanelInnerProps) {
-  const [about, setAbout] = useState<AskAbout>("TARGET");
+function AskPanelInner({ ask, onRefresh }: { ask: AskView; onRefresh: () => Promise<void> }) {
   const [question, setQuestion] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [pendingQuestion, setPendingQuestion] = useState<{ text: string; about: AskAbout } | null>(null);
+  const [pendingQuestion, setPendingQuestion] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<AskResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const isFirstMount = useRef(true);
-
-  const isLastResultInHistory = lastResult
-    ? ask.history.some(
-        (h) =>
-          (h.createdAt && h.createdAt === lastResult.createdAt) ||
-          (h.question === lastResult.question && h.answer === lastResult.answer),
-      )
+  // 가려진 답변(저장 안 됨)도 한 번은 보여주기 위해 마지막 응답을 로컬 보관
+  const lastInHistory = lastResult
+    ? ask.history.some((h) => h.createdAt === lastResult.createdAt || (h.question === lastResult.question && h.answer === lastResult.answer))
     : false;
+  const history: AskEntryView[] = lastResult && !lastInHistory ? [...ask.history, lastResult] : ask.history;
 
-  const displayedHistory: AskEntryView[] =
-    lastResult && !isLastResultInHistory
-      ? [...ask.history, lastResult]
-      : ask.history;
-
-  const isInputDisabled = !ask.enabled || ask.remaining <= 0 || isLoading;
+  const disabled = !ask.enabled || ask.remaining <= 0 || isLoading;
   const maxLength = ask.maxLength > 0 ? ask.maxLength : 100;
-  const friendName = targetName || "친구";
-
   const placeholder = !ask.enabled
     ? "게임 진행 중에만 사용할 수 있어요"
     : ask.remaining <= 0
       ? "질문 기회를 모두 썼어요"
-      : about === "TARGET"
-        ? `예: "${friendName}님은 운동을 좋아하나요?"`
-        : `예: "비밀 마니또는 저보다 키가 큰가요?"`;
+      : '예: "비밀 마니또는 운동을 좋아하나요?"';
 
-  // Auto scroll down when new message or pending question appears
   useEffect(() => {
-    if (!scrollContainerRef.current) return;
-    if (isFirstMount.current) {
-      isFirstMount.current = false;
-      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-      return;
-    }
-    scrollContainerRef.current.scrollTo({
-      top: scrollContainerRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [displayedHistory.length, pendingQuestion]);
+    const el = scrollRef.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [history.length, pendingQuestion]);
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (isInputDisabled || isLoading) return;
-
-    const trimmed = question.trim();
-    if (trimmed.length < 2) {
-      setError("질문은 2자 이상 입력해 주세요.");
-      return;
-    }
-    if (trimmed.length > maxLength) {
-      setError(`질문은 ${maxLength}자 이하로 입력해 주세요.`);
-      return;
-    }
-
+  const submit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (disabled) return;
+    const q = question.trim();
+    if (q.length < 2) return setError("질문은 2자 이상 입력해 주세요.");
+    if (q.length > maxLength) return setError(`질문은 ${maxLength}자 이하로 입력해 주세요.`);
     setError(null);
-    setPendingQuestion({ text: trimmed, about });
+    setPendingQuestion(q);
     setIsLoading(true);
-
     try {
-      const res = await api<AskResult>("/api/me/ask", { question: trimmed, about });
+      const res = await api<AskResult>("/api/me/ask", { question: q });
       setQuestion("");
-      setPendingQuestion(null);
       setLastResult(res);
       await onRefresh();
     } catch (err) {
-      setPendingQuestion(null);
-      if (err instanceof ApiRequestError) {
-        setError(err.message);
-      } else {
-        setError("질문 전송에 실패했습니다. 다시 시도해 주세요.");
-      }
+      setError(err instanceof ApiRequestError ? err.message : "질문 전송에 실패했습니다. 다시 시도해 주세요.");
     } finally {
+      setPendingQuestion(null);
       setIsLoading(false);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      if (e.nativeEvent.isComposing) return;
-      e.preventDefault();
-      void handleSubmit();
-    }
-  };
+  const bubbleQ = "max-w-[85%] rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs";
 
   return (
     <Card className="flex flex-col gap-3">
-      {/* Header */}
       <div>
         <div className="flex items-center justify-between gap-2">
           <h3 className="flex items-center gap-1.5 text-[17px] font-bold tracking-tight text-ink">
@@ -140,12 +85,9 @@ function AskPanelInner({ ask, targetName, onRefresh }: AskPanelInnerProps) {
             남은 질문 {ask.remaining}/{ask.total}
           </Badge>
         </div>
-        <p className="mt-1 text-xs text-ink-soft">
-          두 사람에 대한 질문 횟수를 함께 써요 (미션 완료 시 +1)
-        </p>
+        <p className="mt-1 text-xs text-ink-soft">🎭 나를 섬기는 비밀 마니또에 대해 물어보세요 (미션 완료 시 질문 +1)</p>
       </div>
 
-      {/* Guide notice when disabled or exhausted */}
       {!ask.enabled ? (
         <div className="rounded-xl border border-line bg-surface-2/80 p-2.5 text-center text-xs text-ink-soft">
           게임 진행 중에만 사용할 수 있어요 (또는 AI 미설정)
@@ -156,113 +98,56 @@ function AskPanelInner({ ask, targetName, onRefresh }: AskPanelInnerProps) {
         </div>
       ) : null}
 
-      {/* Chat History Box (Internal Scroll) */}
       <div
-        ref={scrollContainerRef}
-        className="flex max-h-72 min-h-28 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl bg-surface-2/40 p-3"
+        ref={scrollRef}
+        className="flex max-h-72 min-h-24 flex-col gap-3 overflow-y-auto overflow-x-hidden rounded-xl bg-surface-2/40 p-3"
       >
-        {displayedHistory.length === 0 && !pendingQuestion ? (
+        {history.length === 0 && !pendingQuestion ? (
           <div className="flex flex-1 flex-col items-center justify-center py-6 text-center text-xs text-ink-soft">
             <span className="mb-1 text-2xl" aria-hidden="true">
               💭
             </span>
-            <p className="font-semibold text-ink">
-              자연어로 자유롭게 질문해 보세요!
-            </p>
-            <p className="mt-1 text-[11px] text-ink-soft/80">
-              내가 섬기는 {friendName} 님 또는 비밀 마니또를 선택하여 질문할 수 있어요.
-            </p>
+            <p className="font-semibold text-ink">비밀 마니또에 대해 자연어로 질문해 보세요!</p>
+            <p className="mt-1 text-[11px] text-ink-soft/80">AI가 예 / 아니오 / 조금 / 알 수 없음과 힌트로 답해드려요.</p>
           </div>
         ) : (
           <>
-            {displayedHistory.map((item, idx) => {
-              const verdictConf =
-                VERDICT_CONFIG[item.verdict] ?? { label: "알 수 없음", tone: "neutral" as const };
-              const isTargetQuestion = item.about === "TARGET";
-
+            {history.map((item, idx) => {
+              const v = VERDICT_CONFIG[item.verdict] ?? VERDICT_CONFIG.UNKNOWN;
               return (
-                <div key={`${item.createdAt || "history"}-${idx}`} className="flex flex-col gap-2">
-                  {/* 내 질문 (오른쪽) */}
+                <div key={`${item.createdAt}-${idx}`} className="flex flex-col gap-2">
                   <div className="flex justify-end">
-                    <div className="flex max-w-[85%] flex-col items-end gap-1">
-                      <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-ink border border-line/60 shadow-2xs">
-                        {isTargetQuestion ? (
-                          <>
-                            <span>💝</span>
-                            <span>내가 섬기는 {friendName}</span>
-                          </>
-                        ) : (
-                          <>
-                            <span>🎭</span>
-                            <span>비밀 마니또</span>
-                          </>
-                        )}
-                      </span>
-                      <div className="rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs">
-                        {item.question}
-                      </div>
-                    </div>
+                    <div className={bubbleQ}>{item.question}</div>
                   </div>
-
-                  {/* AI 답변 (왼쪽) */}
                   <div className="flex justify-start">
                     <div className="max-w-[85%] rounded-2xl rounded-tl-xs border border-line bg-surface px-3.5 py-2 text-sm shadow-xs">
                       <div className="flex items-start gap-1.5">
                         <span className="mt-0.5 shrink-0">
-                          <Badge tone={verdictConf.tone}>{verdictConf.label}</Badge>
+                          <Badge tone={v.tone}>{v.label}</Badge>
                         </span>
-                        <span className="leading-relaxed text-ink break-words">
-                          {item.answer}
-                        </span>
+                        <span className="leading-relaxed text-ink break-words">{item.answer}</span>
                       </div>
                     </div>
                   </div>
                 </div>
               );
             })}
-
-            {/* 요청 중: 내 질문 말풍선 + AI 생각 중 애니메이션 */}
             {pendingQuestion && (
               <div className="flex flex-col gap-2">
                 <div className="flex justify-end">
-                  <div className="flex max-w-[85%] flex-col items-end gap-1">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-ink border border-line/60">
-                      {pendingQuestion.about === "TARGET" ? (
-                        <>
-                          <span>💝</span>
-                          <span>내가 섬기는 {friendName}</span>
-                        </>
-                      ) : (
-                        <>
-                          <span>🎭</span>
-                          <span>비밀 마니또</span>
-                        </>
-                      )}
-                    </span>
-                    <div className="rounded-2xl rounded-tr-xs bg-brand px-3.5 py-2 text-sm text-brand-ink break-words whitespace-pre-wrap shadow-xs">
-                      {pendingQuestion.text}
-                    </div>
-                  </div>
+                  <div className={bubbleQ}>{pendingQuestion}</div>
                 </div>
-
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2 rounded-2xl rounded-tl-xs border border-line bg-surface px-3.5 py-2.5 text-sm shadow-xs">
-                    <span className="text-xs font-medium text-ink-soft">
-                      생각 중…
-                    </span>
+                    <span className="text-xs font-medium text-ink-soft">생각 중…</span>
                     <span className="flex items-center gap-1">
-                      <span
-                        className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand"
-                        style={{ animationDelay: "0ms" }}
-                      />
-                      <span
-                        className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand"
-                        style={{ animationDelay: "150ms" }}
-                      />
-                      <span
-                        className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand"
-                        style={{ animationDelay: "300ms" }}
-                      />
+                      {[0, 150, 300].map((d) => (
+                        <span
+                          key={d}
+                          className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand"
+                          style={{ animationDelay: `${d}ms` }}
+                        />
+                      ))}
                     </span>
                   </div>
                 </div>
@@ -272,38 +157,7 @@ function AskPanelInner({ ask, targetName, onRefresh }: AskPanelInnerProps) {
         )}
       </div>
 
-      {/* Input Form with Target Toggle Segment */}
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2.5">
-        {/* Toggle Segment */}
-        <div className="flex rounded-xl bg-surface-2 p-1">
-          <button
-            type="button"
-            onClick={() => setAbout("TARGET")}
-            disabled={isLoading}
-            className={`flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-bold transition ${
-              about === "TARGET"
-                ? "bg-surface text-brand shadow-xs"
-                : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            <span>💝</span>
-            <span>내가 섬기는 {friendName}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setAbout("MANITO")}
-            disabled={isLoading}
-            className={`flex min-h-9 flex-1 items-center justify-center gap-1 rounded-lg px-2 text-xs font-bold transition ${
-              about === "MANITO"
-                ? "bg-surface text-brand shadow-xs"
-                : "text-ink-soft hover:text-ink"
-            }`}
-          >
-            <span>🎭</span>
-            <span>비밀 마니또</span>
-          </button>
-        </div>
-
+      <form onSubmit={submit} className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <div className="relative min-w-0 flex-1">
             <Input
@@ -313,28 +167,25 @@ function AskPanelInner({ ask, targetName, onRefresh }: AskPanelInnerProps) {
                 setQuestion(e.target.value);
                 if (error) setError(null);
               }}
-              onKeyDown={handleKeyDown}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void submit();
+                }
+              }}
               placeholder={placeholder}
               maxLength={maxLength}
-              disabled={isInputDisabled}
+              disabled={disabled}
               className="pr-14 text-sm"
             />
             <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] text-ink-soft/70">
               {question.length}/{maxLength}
             </span>
           </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={isInputDisabled || question.trim().length < 2}
-            loading={isLoading}
-            className="shrink-0 px-4"
-          >
+          <Button type="submit" disabled={disabled || question.trim().length < 2} loading={isLoading} className="shrink-0 px-4">
             질문
           </Button>
         </div>
-
         <ErrorText>{error}</ErrorText>
       </form>
     </Card>
