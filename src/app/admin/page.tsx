@@ -167,6 +167,11 @@ export default function AdminPage() {
           {/* 4. MissionManager */}
           <MissionManager
             missions={data.missions}
+            auto={{
+              enabled: data.session.missionAuto,
+              nextAt: data.session.nextMissionAt,
+              sessionActive: data.session.status === "ACTIVE",
+            }}
             clockOffsetMs={clockOffsetMs}
             onRefresh={refresh}
           />

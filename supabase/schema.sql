@@ -307,3 +307,7 @@ alter table public.tmi_quizzes add column if not exists kind text not null defau
 alter table public.tmi_quizzes drop constraint if exists tmi_quizzes_kind_check;
 alter table public.tmi_quizzes add constraint tmi_quizzes_kind_check check (kind in ('WHO','BLANK'));
 alter table public.tmi_quizzes add column if not exists subject text;        -- 빈칸 퀴즈의 주인공 이름
+
+-- 미션 랜덤 자동 오픈 스케줄 (세션 단위)
+alter table public.game_sessions add column if not exists mission_auto boolean not null default true;
+alter table public.game_sessions add column if not exists next_mission_at timestamptz;

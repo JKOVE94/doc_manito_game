@@ -1,5 +1,14 @@
 import "server-only";
-import { DEFAULT_MISSIONS, MAX_HINT_LEVEL, MISSION_SLOT_COUNT, UNLOCK_THRESHOLDS } from "@/lib/config";
+import { randomInt } from "node:crypto";
+import {
+  DEFAULT_MISSIONS,
+  MAX_HINT_LEVEL,
+  MISSION_DURATION_MIN,
+  MISSION_FIRST_DELAY_MIN,
+  MISSION_INTERVAL_MIN,
+  MISSION_SLOT_COUNT,
+  UNLOCK_THRESHOLDS,
+} from "@/lib/config";
 import type { BetStatus, Faction, Prediction, SessionStatus, SubmissionStatus, TimerStatus, TimerView } from "@/lib/types";
 import { db, must, mustOne } from "./supabase";
 
@@ -17,6 +26,8 @@ export interface SessionRow {
   bet_status: BetStatus;
   winning_faction: Faction | null;
   started_at: string | null;
+  mission_auto: boolean;
+  next_mission_at: string | null;
 }
 
 export interface ParticipantRow {
@@ -126,7 +137,67 @@ export async function getSession(): Promise<SessionRow> {
       session = { ...updated, revision: updated.revision + 1 };
     }
   }
-  return session;
+  return autoOpenMission(session);
+}
+
+const minutesFromNow = ([lo, hi]: [number, number]) =>
+  new Date(Date.now() + randomInt(lo * 60, hi * 60 + 1) * 1000).toISOString();
+export const firstMissionAt = () => minutesFromNow(MISSION_FIRST_DELAY_MIN);
+export const nextMissionAt = () => minutesFromNow(MISSION_INTERVAL_MIN);
+
+/** 아직 안 열린 가장 앞 슬롯을 지금부터 MISSION_DURATION_MIN 동안 오픈. 남은 미오픈 슬롯 수 반환 */
+export async function openNextUnopenedMission(sessionId: string): Promise<{ opened: number | null; remaining: number }> {
+  const missions = await listMissions(sessionId);
+  const unopened = missions.filter((m) => !m.opened_at);
+  const target = unopened[0];
+  if (!target) return { opened: null, remaining: 0 };
+  const now = Date.now();
+  const updated = must(
+    await db()
+      .from("hourly_missions")
+      .update({
+        opened_at: new Date(now).toISOString(),
+        deadline_time: new Date(now + MISSION_DURATION_MIN * 60_000).toISOString(),
+      })
+      .eq("id", target.id)
+      .is("opened_at", null)
+      .select("hour_slot")
+      .maybeSingle<{ hour_slot: number }>(),
+    "auto open mission",
+  );
+  return { opened: updated?.hour_slot ?? null, remaining: unopened.length - (updated ? 1 : 0) };
+}
+
+/**
+ * 미션 랜덤 자동 오픈 (lazy 스케줄러, 요청 시 판정).
+ * next_mission_at 을 조건부 update 로 선점 → 동시 요청에도 한 번만 오픈.
+ */
+async function autoOpenMission(session: SessionRow): Promise<SessionRow> {
+  if (session.status !== "ACTIVE" || !session.mission_auto || !session.next_mission_at) return session;
+  if (Date.parse(session.next_mission_at) > Date.now()) return session;
+
+  const claimed = must(
+    await db()
+      .from("game_sessions")
+      .update({ next_mission_at: nextMissionAt() })
+      .eq("id", session.id)
+      .eq("next_mission_at", session.next_mission_at)
+      .select("*")
+      .maybeSingle<SessionRow>(),
+    "claim auto mission",
+  );
+  if (!claimed) return session; // 다른 요청이 이미 처리
+
+  const { remaining } = await openNextUnopenedMission(session.id);
+  let result = claimed;
+  if (remaining === 0) {
+    result = must(
+      await db().from("game_sessions").update({ next_mission_at: null }).eq("id", session.id).select("*").single<SessionRow>(),
+      "finish auto missions",
+    ) as SessionRow;
+  }
+  await bump(session.id);
+  return { ...result, revision: result.revision + 1 };
 }
 
 /** 변경 신호 발생 → 모든 클라이언트 Realtime 재조회 */

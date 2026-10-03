@@ -87,6 +87,42 @@ step("TMI import (lines/pipe/tab, space-insensitive name match, unmatched flagge
 
 await admin("/api/admin/session", { action: "start" });
 a = await admin("/api/admin/state");
+
+// 미션 랜덤 자동 오픈: 시작 5~15분 뒤 첫 미션 예약 → 예약 시각이 지나면 다음 요청 때 오픈
+assert.equal(a.session.missionAuto, true);
+const firstIn = (Date.parse(a.session.nextMissionAt) - Date.parse(a.serverNow)) / 60_000;
+assert.ok(firstIn >= 4.9 && firstIn <= 15.1, `first mission in 5~15 min (got ${firstIn.toFixed(1)})`);
+assert.equal(a.missions.filter((m) => m.openedAt).length, 0);
+if (process.env.DB_URL) {
+  const { default: pg } = await import("node:child_process");
+  const psql = (sql) => pg.execFileSync("docker", ["exec", "supabase_db_doc_manito_game", "psql", "-U", "postgres", "-tAc", sql]).toString().trim();
+  psql("update game_sessions set next_mission_at = now() - interval '1 second' where code='main'");
+  a = await admin("/api/admin/state"); // 어떤 조회든 스케줄러 실행
+  assert.deepEqual(a.missions.filter((m) => m.openedAt).map((m) => m.slot), [1], "slot 1 auto-opened");
+  const m1 = a.missions[0];
+  assert.equal(Math.round((Date.parse(m1.deadline) - Date.parse(m1.openedAt)) / 60_000), 30, "30 min limit");
+  const gap = (Date.parse(a.session.nextMissionAt) - Date.parse(a.serverNow)) / 60_000;
+  assert.ok(gap >= 24.9 && gap <= 35.1, `next in 25~35 min (got ${gap.toFixed(1)})`);
+  // 동시 요청이 와도 한 번만 오픈
+  psql("update game_sessions set next_mission_at = now() - interval '1 second' where code='main'");
+  await Promise.all([admin("/api/admin/state"), admin("/api/admin/state"), admin("/api/admin/state"), admin("/api/admin/state")]);
+  a = await admin("/api/admin/state");
+  assert.deepEqual(a.missions.filter((m) => m.openedAt).map((m) => m.slot), [1, 2], "concurrent checks open exactly one slot");
+  // 끄면 예약 해제, 다음 미션 지금 열기
+  await admin("/api/admin/mission/auto", { enabled: false });
+  a = await admin("/api/admin/state");
+  assert.equal(a.session.missionAuto, false);
+  assert.equal(a.session.nextMissionAt, null);
+  await admin("/api/admin/mission/auto", { action: "open-next" });
+  a = await admin("/api/admin/state");
+  assert.deepEqual(a.missions.filter((m) => m.openedAt).map((m) => m.slot), [1, 2, 3]);
+  assert.equal(a.session.nextMissionAt, null, "stays off after manual open when auto is off");
+  await admin("/api/admin/mission/auto", { enabled: true });
+  assert.ok((await admin("/api/admin/state")).session.nextMissionAt, "re-enabled → scheduled");
+  step("mission random auto-open: first 5~15m, then 25~35m, 30m limit, one slot even with concurrent requests, toggle/open-next");
+} else {
+  step("mission auto-open scheduled 5~15m after start (set DB_URL=1 to test the scheduler)");
+}
 const next = new Map(a.chains.map((c) => [c.giver.id, c.receiver.id]));
 const prev = new Map(a.chains.map((c) => [c.receiver.id, c.giver.id]));
 let cur = players[0].id;

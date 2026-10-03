@@ -4,15 +4,18 @@ import { useEffect, useState } from "react";
 import { api, ApiRequestError } from "@/lib/client/api";
 import { Badge, Button, Card, ErrorText, formatClock, Input, SectionTitle } from "@/components/ui";
 import type { AdminMissionRow } from "@/lib/types";
+import { MissionAutoControl } from "./MissionAutoControl";
 
 interface MissionManagerProps {
   missions: AdminMissionRow[];
+  auto: { enabled: boolean; nextAt: string | null; sessionActive: boolean };
   clockOffsetMs: number;
   onRefresh: () => Promise<void>;
 }
 
 export function MissionManager({
   missions,
+  auto,
   clockOffsetMs,
   onRefresh,
 }: MissionManagerProps) {
@@ -42,6 +45,14 @@ export function MissionManager({
       >
         미션 관리
       </SectionTitle>
+
+      <MissionAutoControl
+        enabled={auto.enabled}
+        nextAt={auto.nextAt}
+        sessionActive={auto.sessionActive}
+        clockOffsetMs={clockOffsetMs}
+        onRefresh={onRefresh}
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         {fullMissions.map((mission) => (

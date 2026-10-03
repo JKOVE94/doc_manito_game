@@ -69,3 +69,8 @@ export const BOT_KEYWORD_POOL: [string[], string[], string[]] = [
 
 /** 자리비움 복귀 버퍼(분): 자리비움으로 마감이 연장된 미션에 추가로 주는 시간 */
 export const AWAY_RETURN_BUFFER_MIN = 10;
+
+/** 미션 랜덤 자동 오픈: 시작 후 첫 미션(분), 이후 오픈 간격(분, 무작위), 미션 제한 시간(분) */
+export const MISSION_FIRST_DELAY_MIN: [number, number] = [5, 15];
+export const MISSION_INTERVAL_MIN: [number, number] = [25, 35];
+export const MISSION_DURATION_MIN = 30;

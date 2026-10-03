@@ -288,6 +288,8 @@ export async function buildAdminState(): Promise<AdminState> {
     session: {
       status: session.status,
       startedAt: session.started_at,
+      missionAuto: session.mission_auto,
+      nextMissionAt: session.status === "ACTIVE" && session.mission_auto ? session.next_mission_at : null,
       minParticipants: MIN_PARTICIPANTS,
       canStart: session.status === "READY" && participants.length >= MIN_PARTICIPANTS,
     },

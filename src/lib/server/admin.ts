@@ -12,8 +12,11 @@ import {
   getSession,
   listChains,
   listKeywords,
+  firstMissionAt,
   listMissions,
   listParticipants,
+  nextMissionAt,
+  openNextUnopenedMission,
   recomputeUnlock,
   type SessionRow,
   thresholdLevel,
@@ -50,7 +53,7 @@ export async function startGame(force: boolean): Promise<void> {
   const claimed = must(
     await db()
       .from("game_sessions")
-      .update({ status: "ACTIVE", started_at: nowIso() })
+      .update({ status: "ACTIVE", started_at: nowIso(), next_mission_at: firstMissionAt() })
       .eq("id", session.id)
       .eq("status", "READY")
       .select("id")
@@ -149,6 +152,7 @@ export async function resetGame(keepParticipants: boolean): Promise<void> {
   await updateSession(session, {
     status: "READY",
     started_at: null,
+    next_mission_at: null,
     tl_status: "IDLE",
     tl_ends_at: null,
     tl_remaining_sec: null,
@@ -239,6 +243,25 @@ export async function openMission(slot: number, durationMin: number): Promise<vo
     "open mission",
   );
   await bump(session.id);
+}
+
+/** 미션 자동 오픈 켜기/끄기. 켤 때 진행 중이면 다음 오픈을 지금부터 간격 후로 예약 */
+export async function setMissionAuto(enabled: boolean): Promise<void> {
+  const session = await getSession();
+  const unopened = (await listMissions(session.id)).some((m) => !m.opened_at);
+  await updateSession(session, {
+    mission_auto: enabled,
+    next_mission_at: enabled && session.status === "ACTIVE" && unopened ? nextMissionAt() : null,
+  });
+}
+
+/** 다음 미오픈 미션을 지금 바로 오픈하고, 자동 오픈이면 다음 예약을 다시 잡음 */
+export async function openNextMissionNow(): Promise<void> {
+  const session = await getSession();
+  if (session.status !== "ACTIVE") throw conflict("게임 진행 중에만 미션을 열 수 있어요.");
+  const { opened, remaining } = await openNextUnopenedMission(session.id);
+  if (opened === null) throw conflict("열 수 있는 미션이 남아 있지 않아요.");
+  await updateSession(session, { next_mission_at: session.mission_auto && remaining > 0 ? nextMissionAt() : null });
 }
 
 export async function closeMission(slot: number): Promise<void> {

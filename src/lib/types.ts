@@ -321,6 +321,10 @@ export interface AdminState {
   session: {
     status: SessionStatus;
     startedAt: string | null;
+    /** 미션 랜덤 자동 오픈 사용 여부 */
+    missionAuto: boolean;
+    /** 다음 미션 자동 오픈 예정 시각 (없으면 null) */
+    nextMissionAt: string | null;
     minParticipants: number;
     canStart: boolean;
   };
